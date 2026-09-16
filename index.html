@@ -4,17 +4,13 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="Adquisicion de sensores con Arduino Uno mediante Web Serial." />
-    <title>Deteccion y seguridad de acceso</title>
+    <title>Panel de sensores · Arduino Uno</title>
     <link rel="icon" href="data:," />
     <link rel="stylesheet" href="css/styles.css" />
   </head>
   <body>
     <main class="app-shell">
-      <header class="page-header">
-        <p class="eyebrow">Solemne 1 · Grupo 2</p>
-        <h1>Deteccion y seguridad de acceso</h1>
-        <p>Arduino Uno conectado directamente al navegador mediante USB Serial.</p>
-      </header>
+      <h1 class="sr-only">Panel de sensores</h1>
 
       <section class="control-panel" aria-labelledby="control-title">
         <div class="control-heading">
@@ -22,7 +18,14 @@
             <h2 id="control-title">Arduino Uno</h2>
             <p>Conexion: <strong id="connection-status">Desconectado</strong></p>
           </div>
-          <span id="phase-status" class="status-badge" data-phase="disconnected">Desconectado</span>
+          <div class="control-actions">
+            <label class="theme-switch" for="theme-switch">
+              <span>Blanco y negro</span>
+              <input id="theme-switch" type="checkbox" role="switch" aria-label="Modo blanco y negro" />
+              <span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span>
+            </label>
+            <span id="phase-status" class="status-badge" data-phase="disconnected">Desconectado</span>
+          </div>
         </div>
 
         <div id="message" class="message" data-level="info" role="status" aria-live="polite">
@@ -58,6 +61,14 @@
             <label>Echo <select id="hc-echo" class="pin-select" data-default="5"></select></label>
           </div>
           <p class="reading"><span>Distancia</span><strong id="hc-value">Esperando</strong></p>
+          <div class="sensor-chart">
+            <div class="chart-heading"><span>Distancia · cm</span><strong id="hc-stats">Sin datos</strong></div>
+            <div class="chart-frame">
+              <canvas id="hc-chart" class="chart-canvas" tabindex="0" role="img" aria-label="Historial de distancia. Usa las flechas izquierda y derecha para consultar muestras." aria-describedby="hc-chart-detail">Tu navegador no admite gráficos Canvas.</canvas>
+              <p id="hc-chart-empty" class="chart-empty">Inicia la captura para ver el historial.</p>
+            </div>
+            <p id="hc-chart-detail" class="chart-detail">Señala el gráfico o usa las flechas para consultar una muestra.</p>
+          </div>
         </article>
 
         <article class="sensor-card">
@@ -72,6 +83,14 @@
             <label>Pin digital <select id="pir-pin" class="pin-select" data-default="6"></select></label>
           </div>
           <p class="reading"><span>Movimiento</span><strong id="pir-value">Esperando</strong></p>
+          <div class="sensor-chart">
+            <div class="chart-heading"><span>Movimiento · 0/1</span><strong id="pir-stats">Sin datos</strong></div>
+            <div class="chart-frame">
+              <canvas id="pir-chart" class="chart-canvas" tabindex="0" role="img" aria-label="Historial de movimiento infrarrojo. Usa las flechas izquierda y derecha para consultar muestras." aria-describedby="pir-chart-detail">Tu navegador no admite gráficos Canvas.</canvas>
+              <p id="pir-chart-empty" class="chart-empty">Inicia la captura para ver el historial.</p>
+            </div>
+            <p id="pir-chart-detail" class="chart-detail">Señala el gráfico o usa las flechas para consultar una muestra.</p>
+          </div>
         </article>
 
         <article class="sensor-card">
@@ -86,6 +105,14 @@
             <label>Pin digital <select id="radar-pin" class="pin-select" data-default="7"></select></label>
           </div>
           <p class="reading"><span>Movimiento</span><strong id="radar-value">Esperando</strong></p>
+          <div class="sensor-chart">
+            <div class="chart-heading"><span>Movimiento · 0/1</span><strong id="radar-stats">Sin datos</strong></div>
+            <div class="chart-frame">
+              <canvas id="radar-chart" class="chart-canvas" tabindex="0" role="img" aria-label="Historial de movimiento por microondas. Usa las flechas izquierda y derecha para consultar muestras." aria-describedby="radar-chart-detail">Tu navegador no admite gráficos Canvas.</canvas>
+              <p id="radar-chart-empty" class="chart-empty">Inicia la captura para ver el historial.</p>
+            </div>
+            <p id="radar-chart-detail" class="chart-detail">Señala el gráfico o usa las flechas para consultar una muestra.</p>
+          </div>
         </article>
 
         <article class="sensor-card">
@@ -102,6 +129,14 @@
           </div>
           <p class="hint">Pines fijos por el bus I2C del Arduino Uno.</p>
           <p class="reading"><span>Iluminacion</span><strong id="lux-value">Esperando</strong></p>
+          <div class="sensor-chart">
+            <div class="chart-heading"><span>Iluminancia · lux</span><strong id="lux-stats">Sin datos</strong></div>
+            <div class="chart-frame">
+              <canvas id="lux-chart" class="chart-canvas" tabindex="0" role="img" aria-label="Historial de iluminancia. Usa las flechas izquierda y derecha para consultar muestras." aria-describedby="lux-chart-detail">Tu navegador no admite gráficos Canvas.</canvas>
+              <p id="lux-chart-empty" class="chart-empty">Inicia la captura para ver el historial.</p>
+            </div>
+            <p id="lux-chart-detail" class="chart-detail">Señala el gráfico o usa las flechas para consultar una muestra.</p>
+          </div>
         </article>
 
         <article class="sensor-card">
@@ -116,10 +151,16 @@
             <label>Pin digital <select id="sound-pin" class="pin-select" data-default="8"></select></label>
           </div>
           <p class="reading"><span>Sonido</span><strong id="sound-value">Esperando</strong></p>
+          <div class="sensor-chart">
+            <div class="chart-heading"><span>Sonido · 0/1</span><strong id="sound-stats">Sin datos</strong></div>
+            <div class="chart-frame">
+              <canvas id="sound-chart" class="chart-canvas" tabindex="0" role="img" aria-label="Historial de eventos acústicos. Usa las flechas izquierda y derecha para consultar muestras." aria-describedby="sound-chart-detail">Tu navegador no admite gráficos Canvas.</canvas>
+              <p id="sound-chart-empty" class="chart-empty">Inicia la captura para ver el historial.</p>
+            </div>
+            <p id="sound-chart-detail" class="chart-detail">Señala el gráfico o usa las flechas para consultar una muestra.</p>
+          </div>
         </article>
       </section>
-
-      <p class="footer-note">Los datos permanecen en la memoria de esta pagina hasta recargarla.</p>
     </main>
     <script type="module" src="js/app.js"></script>
   </body>

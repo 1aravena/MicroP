@@ -1,6 +1,6 @@
 # Deteccion y seguridad de acceso — Grupo 2
 
-Proyecto experimental de la Solemne 1. Un Arduino Uno adquiere cinco sensores y envia una muestra conjunta por segundo a una pagina web estatica mediante USB y Web Serial. La pagina permite configurar pines, activar sensores, ver lecturas reales y descargar la sesion como CSV sin backend ni almacenamiento remoto.
+Proyecto experimental de la Solemne 1. Un Arduino Uno adquiere cinco sensores y envia una muestra conjunta por segundo a una pagina web estatica mediante USB y Web Serial. La pagina permite configurar pines, activar sensores, ver lecturas y graficos temporales, y descargar la sesion como CSV sin backend ni almacenamiento remoto.
 
 ## Sensores
 
@@ -70,6 +70,8 @@ Abre `http://localhost:8000`. No abras `index.html` directamente porque los modu
 9. Deten la captura y pulsa **Descargar CSV**.
 
 Cada nueva captura limpia las filas de la captura anterior. Antes de iniciar una nueva, descarga cualquier sesion que necesites conservar. Una desconexion fisica detiene el estado de captura, pero las filas ya recibidas siguen disponibles para descarga mientras no se recargue la pagina.
+
+Cada tarjeta grafica toda la captura del sensor. Señala un punto o enfoca el grafico y usa las flechas izquierda/derecha para consultar tiempo y valor exactos; las flechas Inicio/Fin llevan a la primera o ultima muestra. Los graficos dejan espacios cuando un sensor esta desactivado. Distancia e iluminancia muestran minimo y maximo; los sensores digitales cuentan episodios al pasar de 0 a 1. El interruptor **Blanco y negro** cambia a fondo negro y trazos blancos y recuerda la preferencia al recargar.
 
 ## Archivo CSV
 

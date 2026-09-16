@@ -1,7 +1,9 @@
 import { ALLOWED_PINS, buildCsv, parseSampleLine, serializeConfig, validateConfig } from "./protocol.js";
 import { SerialConnection } from "./serial.js";
+import { SensorCharts } from "./charts.js";
 
 const TARGET_RECORDS = 300;
+const THEME_STORAGE_KEY = "microp-theme";
 const SENSOR_IDS = {
   "hc-enabled": "HC",
   "pir-enabled": "PIR",
@@ -23,6 +25,7 @@ const elements = {
   count: document.querySelector("#records-count"),
   elapsed: document.querySelector("#elapsed-time"),
   target: document.querySelector("#target-message"),
+  theme: document.querySelector("#theme-switch"),
   pinSelects: [...document.querySelectorAll(".pin-select")],
   toggles: [...document.querySelectorAll(".toggle input")],
   values: {
@@ -45,6 +48,24 @@ const state = {
   captureStartedAt: 0,
   stoppedElapsedMs: 0,
 };
+
+try {
+  elements.theme.checked = localStorage.getItem(THEME_STORAGE_KEY) === "mono";
+} catch {
+  elements.theme.checked = false;
+}
+document.documentElement.dataset.theme = elements.theme.checked ? "mono" : "color";
+const charts = new SensorCharts();
+
+elements.theme.addEventListener("change", () => {
+  document.documentElement.dataset.theme = elements.theme.checked ? "mono" : "color";
+  try {
+    localStorage.setItem(THEME_STORAGE_KEY, elements.theme.checked ? "mono" : "color");
+  } catch {
+    // El cambio visual funciona aunque el navegador bloquee el almacenamiento.
+  }
+  charts.redraw();
+});
 
 for (const select of elements.pinSelects) {
   for (const pin of ALLOWED_PINS) select.add(new Option(`D${pin}`, String(pin)));
@@ -167,6 +188,7 @@ function handleSerialLine(line) {
   try {
     const sample = parseSampleLine(line, state.appliedEnabled);
     state.rows.push(sample);
+    charts.setRows(state.rows);
     updateReadings(sample);
     render();
   } catch (error) {
@@ -230,6 +252,7 @@ elements.start.addEventListener("click", async () => {
   try {
     await runCommand(() => serial.sendCommand("START"));
     state.rows = [];
+    charts.setRows(state.rows, { resetSelection: true });
     state.capturing = true;
     state.phase = "capturing";
     state.captureStartedAt = performance.now();
