@@ -1,98 +1,99 @@
-export const CSV_HEADER = "tiempo_ms,distancia_cm,pir_estado,radar_estado,lux,sonido_estado";
-export const ALLOWED_PINS = Array.from({ length: 11 }, (_, index) => index + 2);
-
-const ACTIVE_PIN_ROLES = [
-  ["hc", "hcTrigger", "HC-SR04 Trigger"],
-  ["hc", "hcEcho", "HC-SR04 Echo"],
-  ["pir", "pirPin", "HC-SR501"],
-  ["radar", "radarPin", "RCWL-0516"],
-  ["sound", "soundPin", "LM393 sonido"],
+export const PROTOCOL_VERSION = 2;
+export const ROLES = ["UNO", "NANO"];
+export const SENSOR_KEYS = ["hc", "pir", "radar", "lux", "sound"];
+export const SENSOR_ORIGIN = { hc: "UNO", lux: "UNO", sound: "UNO", pir: "NANO", radar: "NANO" };
+export const ALLOWED_PINS = Array.from({ length: 11 }, (_, i) => i + 2);
+export const WIRE_HEADER = "origen,secuencia,tiempo_ms,distancia_cm,pir_estado,radar_estado,lux,sonido_estado";
+export const CSV_HEADER = `fecha_hora_recepcion,captura_id,${WIRE_HEADER}`;
+export const INCIDENT_HEADER = "fecha_hora,origen,tipo,descripcion";
+const PIN_ROLES = [
+  ["hc", "hcTrigger", "Trigger"], ["hc", "hcEcho", "Echo"],
+  ["pir", "pirPin", "PIR"], ["radar", "radarPin", "Radar"], ["sound", "soundPin", "Sonido DO"],
 ];
+
+export function defaultConfig(origin) {
+  if (!ROLES.includes(origin)) throw new Error("Origen desconocido.");
+  return { origin, hcTrigger: 4, hcEcho: 5, pirPin: 6, radarPin: 7, soundPin: 8,
+    enabled: Object.fromEntries(SENSOR_KEYS.map(key => [key, SENSOR_ORIGIN[key] === origin])) };
+}
 
 export function validateConfig(config) {
   const errors = [];
-  const pinFields = [
-    ["hcTrigger", "HC-SR04 Trigger"],
-    ["hcEcho", "HC-SR04 Echo"],
-    ["pirPin", "HC-SR501"],
-    ["radarPin", "RCWL-0516"],
-    ["soundPin", "LM393 sonido"],
-  ];
-
-  for (const [field, label] of pinFields) {
-    if (!ALLOWED_PINS.includes(config[field])) {
-      errors.push(`${label} debe usar un pin entre D2 y D12.`);
-    }
+  if (!ROLES.includes(config?.origin)) return ["Origen desconocido."];
+  for (const key of SENSOR_KEYS) {
+    if (typeof config.enabled?.[key] !== "boolean") errors.push(`Estado invalido: ${key}.`);
+    if (config.enabled?.[key] && SENSOR_ORIGIN[key] !== config.origin) errors.push(`${key} no pertenece a ${config.origin}.`);
   }
-
-  const usedPins = new Map();
-  for (const [sensor, field, label] of ACTIVE_PIN_ROLES) {
-    if (!config.enabled[sensor]) continue;
+  const used = new Map();
+  for (const [sensor, field, label] of PIN_ROLES) {
+    if (!config.enabled?.[sensor]) continue;
     const pin = config[field];
-    if (usedPins.has(pin)) {
-      errors.push(`D${pin} esta repetido en ${usedPins.get(pin)} y ${label}.`);
-    } else {
-      usedPins.set(pin, label);
-    }
+    if (!ALLOWED_PINS.includes(pin)) errors.push(`${label} debe usar D2 a D12.`);
+    if (used.has(pin)) errors.push(`D${pin} esta repetido en ${used.get(pin)} y ${label}.`);
+    used.set(pin, label);
   }
-
   return errors;
 }
 
 export function serializeConfig(config) {
-  const flag = (value) => (value ? 1 : 0);
-  return [
-    "CONFIG",
-    config.hcTrigger,
-    config.hcEcho,
-    config.pirPin,
-    config.radarPin,
-    config.soundPin,
-    flag(config.enabled.hc),
-    flag(config.enabled.pir),
-    flag(config.enabled.radar),
-    flag(config.enabled.lux),
-    flag(config.enabled.sound),
-  ].join(",");
+  const errors = validateConfig(config);
+  if (errors.length) throw new Error(errors.join(" "));
+  return ["CONFIG", config.hcTrigger, config.hcEcho, config.pirPin, config.radarPin, config.soundPin,
+    ...SENSOR_KEYS.map(key => Number(config.enabled[key]))].join(",");
 }
 
-function parseNumber(token, label) {
-  if (token.trim() === "") throw new Error(`${label} esta vacio.`);
+export function parseIdentity(line, expectedOrigin) {
+  const tokens = line.split(",");
+  if (tokens.length !== 4 || tokens[0] !== "@OK" || tokens[1] !== "INFO" || tokens[2] !== String(PROTOCOL_VERSION)) {
+    throw new Error("Firmware incompatible: se requiere protocolo 2. Carga el sketch nuevo de esta placa.");
+  }
+  if (tokens[3] !== expectedOrigin) throw new Error(`Se esperaba ${expectedOrigin}; el firmware declara ${tokens[3]}. Selecciona el puerto correcto.`);
+  return { origin: expectedOrigin, version: PROTOCOL_VERSION };
+}
+
+function unsigned(token, label, positive = false) {
+  if (!/^\d+$/.test(token)) throw new Error(`${label} debe ser un entero no negativo.`);
   const value = Number(token);
-  if (!Number.isFinite(value) || value < 0) throw new Error(`${label} no es valido.`);
+  if (!Number.isSafeInteger(value) || value > 0xffffffff || (positive && value === 0)) throw new Error(`${label} fuera de rango.`);
   return value;
 }
 
-function parseState(token, label) {
-  if (token !== "0" && token !== "1") throw new Error(`${label} debe ser 0 o 1.`);
-  return Number(token);
-}
-
-function parseField(token, active, label, parser) {
-  if (!active) {
-    if (token !== "NA") throw new Error(`${label} debe ser NA cuando el sensor esta desactivado.`);
+function parseValue(token, key, origin, enabled) {
+  if (SENSOR_ORIGIN[key] !== origin || !enabled[key]) {
+    if (token !== "NA") throw new Error(`${key} debe ser NA para este origen o sensor desactivado.`);
     return null;
   }
-  if (token === "NA") throw new Error(`${label} falta para un sensor activo.`);
-  return parser(token, label);
+  if (token === "NA") return null;
+  if (["pir", "radar", "sound"].includes(key)) {
+    if (token !== "0" && token !== "1") throw new Error(`${key} debe ser 0 o 1.`);
+    return Number(token);
+  }
+  if (!/^\d+(?:\.\d+)?$/.test(token)) throw new Error(`${key} no es un numero valido.`);
+  const value = Number(token);
+  if (!Number.isFinite(value) || (key === "hc" && (value < 2 || value > 400))) throw new Error(`${key} fuera de rango.`);
+  return value;
 }
 
-export function parseSampleLine(line, enabled) {
-  const tokens = line.trim().split(",");
-  if (tokens.length !== 6) throw new Error("La muestra no contiene exactamente seis columnas.");
-  if (!/^\d+$/.test(tokens[0])) throw new Error("tiempo_ms debe ser un entero no negativo.");
+export function parseSampleLine(line, config) {
+  const tokens = line.split(",");
+  if (tokens.length !== 8) throw new Error("La muestra debe contener ocho columnas.");
+  const origin = tokens[0];
+  if (!ROLES.includes(origin) || origin !== config.origin) throw new Error("Origen incorrecto en la muestra.");
+  const values = SENSOR_KEYS.map((key, i) => parseValue(tokens[i + 3], key, origin, config.enabled));
+  return { raw: line, origin, sequence: unsigned(tokens[1], "secuencia", true),
+    timeMs: unsigned(tokens[2], "tiempo_ms"), distanceCm: values[0], pir: values[1], radar: values[2], lux: values[3], sound: values[4] };
+}
 
-  return {
-    raw: tokens.join(","),
-    timeMs: Number(tokens[0]),
-    distanceCm: parseField(tokens[1], enabled.hc, "distancia_cm", parseNumber),
-    pir: parseField(tokens[2], enabled.pir, "pir_estado", parseState),
-    radar: parseField(tokens[3], enabled.radar, "radar_estado", parseState),
-    lux: parseField(tokens[4], enabled.lux, "lux", parseNumber),
-    sound: parseField(tokens[5], enabled.sound, "sonido_estado", parseState),
-  };
+function csvCell(value) {
+  let text = String(value ?? "");
+  if (/^[=+\-@\t\r]/.test(text)) text = `'${text}`;
+  return /[",\r\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
 }
 
 export function buildCsv(rows) {
-  return [CSV_HEADER, ...rows.map((row) => row.raw)].join("\r\n");
+  return [CSV_HEADER, ...rows.map(row => [csvCell(row.receivedAt), csvCell(row.captureId), row.raw].join(","))].join("\r\n");
+}
+
+export function buildIncidentCsv(incidents) {
+  return [INCIDENT_HEADER, ...incidents.map(item => [item.at, item.origin, item.type, item.description].map(csvCell).join(","))].join("\r\n");
 }

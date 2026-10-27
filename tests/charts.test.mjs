@@ -45,3 +45,21 @@ test("formatea el tiempo de la captura incluso después de una hora", () => {
   assert.equal(formatElapsedTime(123000), "02:03");
   assert.equal(formatElapsedTime(3723000), "01:02:03");
 });
+
+test("intercalar Nano no corta ni rellena las lecturas de Uno", () => {
+  const rows = [
+    { origin: "UNO", timeMs: 1000, distanceCm: 12 },
+    { origin: "NANO", timeMs: 1100, distanceCm: null, pir: 1 },
+    { origin: "UNO", timeMs: 2000, distanceCm: 14 },
+    { origin: "NANO", timeMs: 2100, distanceCm: null, pir: 0 },
+  ];
+  assert.deepEqual(calculateSensorStats(rows, "hc"), { count: 2, min: 12, max: 14 });
+  assert.equal(buildSeriesSegments(rows, "hc").length, 1);
+  assert.equal(buildSeriesSegments(rows, "hc")[0].length, 2);
+  assert.deepEqual(calculateSensorStats(rows, "pir"), { count: 2, episodes: 1 });
+});
+
+test("un intervalo sin recepcion deja un corte visible en el grafico", () => {
+  const rows = [{ timeMs: 1000, distanceCm: 10 }, { timeMs: 6000, distanceCm: 20 }];
+  assert.equal(buildSeriesSegments(rows, "hc").length, 2);
+});
