@@ -1,6 +1,6 @@
 # Protocolo serial 2
 
-Contrato comun de los firmwares Uno/Nano y de la pagina de diagnostico. Transporte: USB/serial, 115200 baudios, 8N1, una linea por mensaje terminada en LF. Se acepta CRLF. Los comandos distinguen mayusculas y no admiten espacios ni campos vacios. No hay checksum adicional en esta version: se valida estructura, origen, tipos, rangos y secuencia; no se afirma detectar toda corrupcion posible.
+Contrato comun de los firmwares Uno/Nano, la pagina de diagnostico y el backend Python. Transporte: USB/serial, 115200 baudios, 8N1, una linea por mensaje terminada en LF. Se acepta CRLF. Los comandos distinguen mayusculas y no admiten espacios ni campos vacios. No hay checksum adicional en esta version: se valida estructura, origen, tipos, rangos y secuencia; no se afirma detectar toda corrupcion posible.
 
 ## Identidad y ciclo de vida
 
@@ -83,8 +83,8 @@ CSV de mediciones:
 fecha_hora_recepcion,captura_id,origen,secuencia,tiempo_ms,distancia_cm,pir_estado,radar_estado,lux,sonido_estado
 ```
 
-La fecha/hora es UTC del **PC receptor**, no de Raspberry ni del reloj Arduino. `captura_id` es un UUID nuevo por cada START confirmado. Los campos posteriores a esos dos metadatos reproducen el mensaje recibido y validado. No se fusionan ni completan filas con valores de otra placa. Los graficos utilizan un eje monotono comun de recepcion del PC y separan las series por origen y por captura actual.
+La fecha/hora es UTC del **equipo receptor**: el PC en diagnostico USB o la Raspberry cuando ejecuta el backend. No procede del reloj Arduino. `captura_id` es un UUID nuevo por cada START confirmado. Los campos posteriores a esos dos metadatos reproducen el mensaje recibido y validado. No se fusionan ni completan filas con valores de otra placa. En la pagina USB, los graficos utilizan un eje monotono comun de recepcion del PC y separan las series por origen y por captura actual.
 
 CSV de incidencias: `fecha_hora,origen,tipo,descripcion`. Incluye conexiones, CONFIG confirmado, START/STOP, ENABLE, reinicios, errores, lecturas faltantes y saltos de secuencia. El texto se escapa para CSV y se neutralizan prefijos de formula en los campos de texto recibidos.
 
-Los historiales de esta etapa viven en la memoria de la pestaña. Solo la descarga crea un archivo persistente. La exportacion incluye capturas anteriores; la pantalla grafica muestra la captura actual de cada placa. No son todavia ventanas de ML, conjuntos etiquetados ni validacion del requisito de observaciones de la Solemne.
+En la pagina USB, los historiales viven en la memoria de la pestaña y la descarga crea un archivo persistente. El backend Python guarda automaticamente en SQLite y exporta el mismo formato desde disco; ver la [guia del backend](raspberry-backend.md). La pantalla USB grafica la captura actual de cada placa. Ninguno de estos registros constituye por si solo ventanas de ML, conjuntos etiquetados ni validacion del requisito de observaciones de la Solemne.

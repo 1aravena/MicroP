@@ -1,0 +1,9 @@
+{
+  "database": "data/microp.sqlite3",
+  "host": "127.0.0.1",
+  "port": 8001,
+  "command_timeout": 4.0,
+  "reset_delay": 1.5,
+  "read_timeout": 0.1,
+  "stale_after": 3.5
+}
