@@ -1,8 +1,14 @@
 # Deteccion y seguridad de acceso · Grupo C · Solemne 2
 
-Herramienta local para comprobar sensores conectados a **dos Arduino independientes**, configurar sus pines, consultar graficos y exportar mediciones e incidencias. Rama `feat/arduino-uno-nano`.
+Herramienta local para comprobar sensores conectados a **dos Arduino independientes**, configurar sus pines, consultar graficos y exportar mediciones e incidencias. Incluye el diagnostico USB desarrollado en `feat/arduino-uno-nano` y el backend de `feat/raspberry-backend`.
 
-En esta etapa los Arduino se conectan por USB al **PC donde esta abierto el navegador**. Raspberry, Python, almacenamiento persistente, autorizacion de acceso y Machine Learning corresponden a etapas posteriores.
+La pagina de diagnostico conecta los Arduino por USB al **PC donde esta abierto el navegador**. Ademas, `feat/raspberry-backend` incorpora un backend Python independiente que recibe las placas y guarda en SQLite. La conexion de la pagina con ese backend corresponde a `feat/panel-web`; autorizacion y ML siguen pendientes.
+
+## Backend Raspberry
+
+La Zero 2 W ejecuta Python, pySerial, FastAPI y SQLite, con arranque manual en el puerto 8001. Controla cada placa por API, conserva capturas e incidencias tras reiniciar y exporta CSV. La pagina USB actual permanece independiente y no se modifico para usar la API.
+
+Ver la [guia de instalacion, API, pruebas y validacion pendiente](docs/raspberry-backend.md). Punto de entrada: `python -m backend`, desde la raiz del repositorio y usando su entorno virtual. No conecta ni inicia capturas automaticamente. La instalacion en la Raspberry y las comprobaciones con hardware real permanecen pendientes.
 
 ## Distribucion y estado conocido
 
@@ -24,6 +30,8 @@ La pagina propone Uno: Trigger D4, Echo D5, sonido DO D8; Nano: PIR D6 y radar D
 - `js/app.js`: controles, lecturas y exportaciones de la pagina.
 - `js/charts.js`: graficos separados por origen, con tiempo de recepcion comun del PC.
 - `tests/`: pruebas automatizadas y perifericos simulados exclusivos de prueba.
+- `backend/`: protocolo Python, transporte serial, trabajadores independientes, SQLite y API.
+- `requirements.txt` y `requirements-dev.txt`: dependencias fijadas del backend y sus pruebas.
 - `docs/`: especificacion de protocolo y pauta fisica pendiente.
 
 El firmware integrado anterior y los cinco programas individuales se conservan en `arduino/integrado/` y `arduino/individuales/` como referencia. **La pagina nueva requiere los firmwares nuevos con protocolo 2**; ya no controla el montaje anterior de cinco sensores en un solo Uno. `NewPing` sigue siendo dependencia de la prueba individual antigua del HC-SR04, no de los firmwares nuevos.
@@ -87,9 +95,9 @@ fecha_hora_recepcion,captura_id,origen,secuencia,tiempo_ms,distancia_cm,pir_esta
 
 `fecha_hora_recepcion` es UTC del PC receptor; `captura_id` identifica cada START confirmado. `tiempo_ms` mantiene el reloj original de la placa. Los graficos usan otro tiempo interno, monotono y comun de recepcion del PC, para no aparentar sincronizacion entre relojes Arduino.
 
-CSV de incidencias: `fecha_hora,origen,tipo,descripcion`. Incluye configuraciones confirmadas, controles, errores, reinicios y saltos de secuencia. **Todo vive en memoria hasta descargarlo**; esta rama no guarda archivos automaticamente en Raspberry ni en un servidor.
+CSV de incidencias: `fecha_hora,origen,tipo,descripcion`. Incluye configuraciones confirmadas, controles, errores, reinicios y saltos de secuencia. **En el diagnostico USB los datos viven en memoria hasta descargarlos**. El backend, por separado, guarda automaticamente en SQLite del equipo donde se ejecuta.
 
-## Pruebas de software
+## Pruebas del diagnostico USB
 
 Requiere Node.js 20 o posterior. No hay dependencias npm de ejecucion ni es necesario `npm install`.
 
@@ -103,7 +111,7 @@ Si se encuentra `g++` (o el compilador indicado en `CXX`), tambien se compilan y
 
 La interfaz se comprobo adicionalmente en Chrome de escritorio y vista movil, incluyendo dos puertos simulados, capturas independientes, desactivacion de un sensor, desconexion aislada y descarga. Esa comprobacion usa fixtures, no hardware real.
 
-## Hoja de ruta de esta rama
+## Estado del diagnostico USB
 
 - [x] Inventario de lo conocido y tabla de cableado pendiente.
 - [x] Protocolo 2 documentado y ejemplos de prueba identificados.
@@ -115,7 +123,7 @@ La interfaz se comprobo adicionalmente en Chrome de escritorio y vista movil, in
 - [ ] Compilar usando los cores de los modelos reales y registrar memoria/versiones.
 - [ ] Completar y adjuntar evidencias de la pauta fisica.
 
-La validacion fisica de la rama permanece pendiente hasta completar esos puntos. La siguiente rama trasladara la recepcion/almacenamiento al backend Python de Raspberry manteniendo este contrato. La pagina USB seguira siendo util para diagnostico.
+La validacion fisica de Uno/Nano permanece pendiente hasta completar esos puntos. El backend Python reutiliza el contrato en su propia capa de adquisicion y almacenamiento; su guia registra las pruebas de software y los ensayos pendientes en Raspberry. La pagina USB sigue siendo util para diagnostico. La siguiente integracion corresponde a `feat/panel-web`.
 
 ## Fuentes tecnicas
 

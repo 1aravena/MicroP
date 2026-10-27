@@ -1,0 +1,42 @@
+{
+  "description": "Casos de contrato ilustrativos. No son capturas fisicas.",
+  "identities": [
+    {"origin":"UNO","line":"@OK,INFO,2,UNO","valid":true},
+    {"origin":"NANO","line":"@OK,INFO,2,NANO","valid":true},
+    {"origin":"UNO","line":"@OK,INFO,1,UNO","valid":false},
+    {"origin":"UNO","line":"@OK,INFO,2,NANO","valid":false},
+    {"origin":"UNO","line":"@OK,INFO,2,UNO,EXTRA","valid":false}
+  ],
+  "configs": [
+    {"origin":"UNO","patch":{},"valid":true,"command":"CONFIG,4,5,6,7,8,1,0,0,1,1"},
+    {"origin":"NANO","patch":{},"valid":true,"command":"CONFIG,4,5,6,7,8,0,1,1,0,0"},
+    {"origin":"UNO","patch":{"soundPin":4},"valid":false},
+    {"origin":"UNO","patch":{"soundPin":4,"enabled":{"sound":false}},"valid":true,"command":"CONFIG,4,5,6,7,4,1,0,0,1,0"},
+    {"origin":"NANO","patch":{"pirPin":4},"valid":true,"command":"CONFIG,4,5,4,7,8,0,1,1,0,0"},
+    {"origin":"NANO","patch":{"enabled":{"lux":true}},"valid":false},
+    {"origin":"UNO","patch":{"enabled":{"sound":"true"}},"valid":false},
+    {"origin":"UNO","patch":{"hcTrigger":0},"valid":false},
+    {"origin":"UNO","patch":{"hcTrigger":13},"valid":false},
+    {"origin":"NANO","patch":{"radarPin":6},"valid":false}
+  ],
+  "samples": [
+    {"origin":"UNO","line":"UNO,1,1000,84.30,NA,NA,182.50,0","valid":true,"expected":{"distanceCm":84.3,"sound":0}},
+    {"origin":"NANO","line":"NANO,1,1000,NA,1,0,NA,NA","valid":true,"expected":{"pir":1,"radar":0,"lux":null}},
+    {"origin":"UNO","line":"UNO,2,2000,NA,NA,NA,0.00,1","valid":true,"expected":{"distanceCm":null,"lux":0}},
+    {"origin":"UNO","line":"UNO,1,1000,20,NA,NA,100,NA","disabled":["sound"],"valid":true,"expected":{"sound":null}},
+    {"origin":"UNO","line":"UNO,1,1000,20,NA,NA,100,0","disabled":["sound"],"valid":false},
+    {"origin":"UNO","line":"1000,1,0,0,80,0","valid":false},
+    {"origin":"UNO","line":"NANO,1,1000,NA,1,0,NA,NA","valid":false},
+    {"origin":"UNO","line":"UNO,0,1000,20,NA,NA,100,0","valid":false},
+    {"origin":"UNO","line":"UNO,1,,20,NA,NA,100,0","valid":false},
+    {"origin":"UNO","line":"UNO,1,1000,0,NA,NA,100,0","valid":false},
+    {"origin":"UNO","line":"UNO,1,1000,401,NA,NA,100,0","valid":false},
+    {"origin":"UNO","line":"UNO,1,1000,20,1,NA,100,0","valid":false},
+    {"origin":"UNO","line":"UNO,1,1000,20,NA,NA,NaN,0","valid":false},
+    {"origin":"UNO","line":"UNO,1,1000,20,NA,NA,0x20,0","valid":false},
+    {"origin":"UNO","line":"UNO,1,1000,20,NA,NA,,0","valid":false},
+    {"origin":"UNO","line":"UNO,1,1000,20,NA,NA,100,2","valid":false},
+    {"origin":"UNO","line":"UNO,1,4294967296,20,NA,NA,100,0","valid":false},
+    {"origin":"NANO","line":"NANO,1,1000,NA,2,0,NA,NA","valid":false}
+  ]
+}
