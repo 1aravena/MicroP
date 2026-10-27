@@ -63,3 +63,20 @@ Registrar fecha, integrante, estimulo, resultado observado y archivo CSV en cada
 | Descargar mediciones e incidencias | Fuentes, tiempos y capturas identificables; NA no inventa mediciones | Pendiente |
 
 La falta de hardware o de un resultado observado debe permanecer marcada como pendiente. Esta rama puede quedar comprobada a nivel de software; su validacion fisica termina solo cuando esta pauta tenga evidencias reales.
+
+## Panel web y Raspberry: validacion fisica pendiente
+
+La interfaz remota ya tiene pruebas de software. Completar estos ensayos con datos reales; las comprobaciones del servidor de QA no los sustituyen.
+
+| Ensayo | Resultado esperado | Resultado observado / archivo |
+| --- | --- | --- |
+| Abrir el panel desde el PC en la IP de Raspberry | Pagina, API y recursos disponibles sin internet | Pendiente |
+| Controlar Uno y Nano desde el panel | Puertos de Raspberry, roles y controles independientes | Pendiente |
+| Capturar 15 minutos y consultar/descargar simultaneamente | Registros persistentes; anotar memoria y funcionamiento | Pendiente |
+| Cerrar y reabrir el navegador durante captura | Mismo UUID, contador creciente y hasta 300 lecturas recientes | Pendiente |
+| Abrir dos pestanas y operar una placa | Estado compartido; conflictos de control informados | Pendiente |
+| Retirar solo Nano de forma controlada | Nano interrumpido; Uno continua; historial conservado | Pendiente |
+| Reiniciar backend y volver al panel | Capturas inconclusas interrumpidas; requiere conectar/configurar/iniciar | Pendiente |
+| Descargar captura de mas de 300 lecturas | CSV completo, aunque el grafico sea una ventana | Pendiente |
+
+Ver el [procedimiento del panel](panel-web.md). Registrar fecha, integrante, versiones, memoria y CSV de cada ensayo.

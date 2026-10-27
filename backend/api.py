@@ -1,9 +1,11 @@
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Annotated, Literal
 from uuid import UUID
 
 from fastapi import Depends, FastAPI, Query, Request
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field
 
 from .config import Settings
@@ -12,6 +14,7 @@ from .service import AcquisitionService
 
 Origin = Literal["UNO", "NANO"]
 Sensor = Literal["hc", "pir", "radar", "lux", "sound"]
+Order = Literal["asc", "desc"]
 
 
 class StrictModel(BaseModel):
@@ -72,6 +75,16 @@ def create_app(settings=None, factory=None):
     # OpenAPI JSON disponible. No se depende de un CDN para utilizar la API sin internet.
     app = FastAPI(title="MicroP · Grupo C", version="1.0.0", lifespan=lifespan, docs_url=None, redoc_url=None)
 
+    web_root = Path(__file__).resolve().parents[1]
+
+    @app.get("/", include_in_schema=False)
+    def panel():
+        return FileResponse(web_root / "panel.html", headers={"Cache-Control": "no-cache"})
+
+    # Solo recursos publicos. Nunca montar la raiz del repositorio ni data/.
+    app.mount("/css", StaticFiles(directory=web_root / "css"), name="css")
+    app.mount("/js", StaticFiles(directory=web_root / "js"), name="js")
+
     @app.exception_handler(BackendError)
     async def backend_error(_, error):
         return JSONResponse(status_code=error.status_code, content={"detail": str(error)})
@@ -121,8 +134,9 @@ def create_app(settings=None, factory=None):
         return service.board(origin).submit("enable", {"sensor": sensor, "enabled": body.enabled})
 
     @app.get(prefix + "/captures")
-    def captures(service: Service, origin: Origin | None = None, after_id: Cursor = 0, limit: Limit = 100):
-        return service.store.page("captures", origin=origin, after_id=after_id, limit=limit)
+    def captures(service: Service, origin: Origin | None = None, after_id: Cursor = 0,
+                 limit: Limit = 100, order: Order = "asc"):
+        return service.store.page("captures", origin=origin, after_id=after_id, limit=limit, order=order)
 
     @app.get(prefix + "/captures/{capture_id}")
     def capture(capture_id: UUID, service: Service):
@@ -130,19 +144,19 @@ def create_app(settings=None, factory=None):
 
     @app.get(prefix + "/samples")
     def samples(service: Service, origin: Origin | None = None, capture_id: UUID | None = None,
-                after_id: Cursor = 0, limit: Limit = 100):
+                after_id: Cursor = 0, limit: Limit = 100, order: Order = "asc"):
         if capture_id:
             service.store.capture(str(capture_id))
         return service.store.page("samples", origin=origin, capture_id=str(capture_id) if capture_id else None,
-                                  after_id=after_id, limit=limit)
+                                  after_id=after_id, limit=limit, order=order)
 
     @app.get(prefix + "/incidents")
     def incidents(service: Service, origin: Origin | None = None, capture_id: UUID | None = None,
-                  after_id: Cursor = 0, limit: Limit = 100):
+                  after_id: Cursor = 0, limit: Limit = 100, order: Order = "asc"):
         if capture_id:
             service.store.capture(str(capture_id))
         return service.store.page("incidents", origin=origin, capture_id=str(capture_id) if capture_id else None,
-                                  after_id=after_id, limit=limit)
+                                  after_id=after_id, limit=limit, order=order)
 
     @app.get(prefix + "/captures/{capture_id}/export.csv")
     def export_capture(capture_id: UUID, service: Service):

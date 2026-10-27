@@ -4,7 +4,7 @@
 
 El backend es un programa Python que controla Uno y Nano por USB y guarda automaticamente sus mediciones e incidencias en SQLite. No necesita un navegador abierto para adquirir datos. Su API permite iniciar/detener, configurar, consultar y exportar CSV.
 
-La pagina existente conserva su conexion USB directa al equipo donde se abre. **Todavia no consulta esta API**: esa integracion corresponde a `feat/panel-web`. Raspberry no necesita Node.js, interfaz grafica, GPIO, un servidor de base de datos adicional ni ML para ejecutar este backend.
+La pagina existente conserva su conexion USB directa al equipo donde se abre. El panel remoto de `feat/panel-web`, disponible en `/`, consulta esta API; el diagnostico USB mantiene su entrada independiente. Ver la [guia del panel](panel-web.md). Raspberry no necesita Node.js, interfaz grafica, GPIO, un servidor de base de datos adicional ni ML para ejecutar este backend.
 
 Objetivo de despliegue confirmado: **Raspberry Pi Zero 2 W, 512 MB, Raspberry Pi OS Lite de 64 bits**. La instalacion y los ensayos fisicos en ese equipo siguen pendientes. Las pruebas actuales son de software, con perifericos simulados.
 
@@ -134,7 +134,7 @@ Cada START confirmado crea un UUID distinto. Cerrar el navegador o dejar de cons
 
 ## Contrato HTTP
 
-Base: `/api/v1`. El esquema generado se consulta en `/openapi.json`; no se incluye una pantalla Swagger dependiente de CDN ni una nueva pagina de control en esta rama.
+Base: `/api/v1`. El esquema generado se consulta en `/openapi.json`; no se incluye una pantalla Swagger dependiente de CDN. El panel de control se sirve en `/`, con recursos locales.
 
 | Metodo | Ruta relativa | Funcion |
 | --- | --- | --- |
@@ -154,9 +154,9 @@ Base: `/api/v1`. El esquema generado se consulta en `/openapi.json`; no se inclu
 | GET | `/captures/{id}/export.csv` | CSV compatible de una captura |
 | GET | `/incidents/export.csv` | CSV de incidencias |
 
-Origen: UNO/NANO. Sensor: hc/pir/radar/lux/sound. Las consultas aceptan `origin`, `after_id` y `limit` (100 por defecto, entre 1 y 500). Mediciones e incidencias tambien admiten `capture_id`. Las paginas devuelven `items` y `nextCursor`; para continuar enviar ese cursor como `after_id`. En capturas el cursor es un ordinal interno, distinto del UUID.
+Origen: UNO/NANO. Sensor: hc/pir/radar/lux/sound. Las consultas aceptan `origin`, `after_id` y `limit` (100 por defecto, entre 1 y 500). Mediciones e incidencias tambien admiten `capture_id`. Las consultas admiten `order=asc|desc` (asc por defecto). En orden descendente, `after_id=0` comienza por los registros mas recientes y un cursor no cero busca IDs menores. Las paginas devuelven `items` y `nextCursor`; para continuar enviar ese cursor como `after_id`. En capturas el cursor es un ordinal interno, distinto del UUID.
 
-El estado de placa incluye `phase`, `connected`, `configured`, `busy`, `port`, `config`, `captureId`, `sampleCount`, `latestSample`, `lastReceivedAt`, `lastError`, `ageMs` y `stale`. Ausencia de muestras por mas de 3,5 segundos durante captura se marca stale, incluso antes de la primera muestra; no se inventan lecturas. El backend es la autoridad del estado: la futura pagina debera consultar estos datos, no crear una segunda captura local.
+El estado de placa incluye `phase`, `connected`, `configured`, `busy`, `port`, `config`, `captureId`, `sampleCount`, `latestSample`, `lastReceivedAt`, `lastError`, `ageMs` y `stale`. Ausencia de muestras por mas de 3,5 segundos durante captura se marca stale, incluso antes de la primera muestra; no se inventan lecturas. El backend es la autoridad del estado: el panel consulta estos datos, no crear una segunda captura local.
 
 Errores: 422 para solicitudes/configuraciones invalidas o identidad incompatible; 409 para estado incompatible o puerto asignado; 404 para captura inexistente; 504 para timeout de comando; 503 para transporte o almacenamiento no disponible. Una operacion en curso rechaza otro comando simultaneo de esa placa sin bloquear la otra.
 
@@ -217,7 +217,7 @@ Las pruebas Python cubren SQLite persistente, exclusividad de instancia/puerto, 
 - [x] Trabajador USB independiente para cada placa.
 - [x] API y cierre de recursos.
 - [x] Pruebas locales de software.
-- [ ] Sincronizacion Git manual con el merge de main y publicacion por parte del usuario.
+- [x] Backend incorporado en main y publicado por el usuario. El panel tiene su propia rama de trabajo.
 - [ ] Instalacion y comprobacion en la Zero 2 W real.
 - [ ] Confirmar modelos/cableado y firmwares en ambos Arduino.
 - [ ] Captura real de 15 minutos, consulta/exportacion simultanea y registro de memoria.

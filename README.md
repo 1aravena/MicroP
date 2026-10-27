@@ -2,13 +2,21 @@
 
 Herramienta local para comprobar sensores conectados a **dos Arduino independientes**, configurar sus pines, consultar graficos y exportar mediciones e incidencias. Incluye el diagnostico USB desarrollado en `feat/arduino-uno-nano` y el backend de `feat/raspberry-backend`.
 
-La pagina de diagnostico conecta los Arduino por USB al **PC donde esta abierto el navegador**. Ademas, `feat/raspberry-backend` incorpora un backend Python independiente que recibe las placas y guarda en SQLite. La conexion de la pagina con ese backend corresponde a `feat/panel-web`; autorizacion y ML siguen pendientes.
+La pagina de diagnostico conecta los Arduino por USB al **PC donde esta abierto el navegador**. Ademas, `feat/raspberry-backend` incorpora un backend Python independiente que recibe las placas y guarda en SQLite. El panel de `feat/panel-web` conecta con esa API y recupera capturas guardadas; autorizacion y ML siguen pendientes.
 
 ## Backend Raspberry
 
-La Zero 2 W ejecuta Python, pySerial, FastAPI y SQLite, con arranque manual en el puerto 8001. Controla cada placa por API, conserva capturas e incidencias tras reiniciar y exporta CSV. La pagina USB actual permanece independiente y no se modifico para usar la API.
+La Zero 2 W ejecuta Python, pySerial, FastAPI y SQLite, con arranque manual en el puerto 8001. Controla cada placa por API, conserva capturas e incidencias tras reiniciar y exporta CSV. El panel remoto se sirve en la entrada del backend; la pagina USB permanece independiente.
 
 Ver la [guia de instalacion, API, pruebas y validacion pendiente](docs/raspberry-backend.md). Punto de entrada: `python -m backend`, desde la raiz del repositorio y usando su entorno virtual. No conecta ni inicia capturas automaticamente. La instalacion en la Raspberry y las comprobaciones con hardware real permanecen pendientes.
+
+## Panel web Raspberry
+
+Iniciar el backend y abrir `http://127.0.0.1:8001/` para comprobarlo en el PC. En Raspberry usar `.venv/bin/python -m backend --host 0.0.0.0` y abrir `http://IP_DE_LA_RASPBERRY:8001/` desde el PC de la misma red. La pagina y la API se sirven juntas, sin otro servidor de frontend.
+
+Incluye seleccion de puertos, controles independientes, configuracion, lecturas y graficos de hasta 300 filas recientes por placa, capturas paginadas y descarga completa de CSV. Cerrar el navegador no detiene ni duplica capturas. No incluye login: se utiliza en la red local de confianza.
+
+Ver la [guia del panel, contrato de consultas y validacion](docs/panel-web.md). `index.html` conserva el diagnostico USB directo mediante localhost del PC o HTTPS, con su funcionamiento anterior. Las pruebas de software y las pruebas fisicas mantienen estados separados.
 
 ## Distribucion y estado conocido
 
@@ -27,8 +35,11 @@ La pagina propone Uno: Trigger D4, Echo D5, sonido DO D8; Nano: PIR D6 y radar D
 - `js/protocol.js`: contrato de mensajes, configuracion, validacion y CSV.
 - `js/serial.js`: una conexion Web Serial por placa, con aislamiento de comandos y errores.
 - `js/board.js`: estado y capturas por placa; no depende del DOM y recibe el transporte por inyeccion.
-- `js/app.js`: controles, lecturas y exportaciones de la pagina.
-- `js/charts.js`: graficos separados por origen, con tiempo de recepcion comun del PC.
+- `js/app.js`: controles, lecturas y exportaciones USB.
+- `js/panel.js`, `js/remote-panel.js` y `js/api-client.js`: vista y control remoto mediante la API.
+- `js/sensor-ui.js`: tarjetas y tema compartidos.
+- `panel.html`: entrada remota servida por el backend, sin Web Serial.
+- `js/charts.js`: graficos separados por origen; tiempo relativo en USB y fecha/hora de recepcion en el panel Raspberry.
 - `tests/`: pruebas automatizadas y perifericos simulados exclusivos de prueba.
 - `backend/`: protocolo Python, transporte serial, trabajadores independientes, SQLite y API.
 - `requirements.txt` y `requirements-dev.txt`: dependencias fijadas del backend y sus pruebas.
@@ -123,7 +134,7 @@ La interfaz se comprobo adicionalmente en Chrome de escritorio y vista movil, in
 - [ ] Compilar usando los cores de los modelos reales y registrar memoria/versiones.
 - [ ] Completar y adjuntar evidencias de la pauta fisica.
 
-La validacion fisica de Uno/Nano permanece pendiente hasta completar esos puntos. El backend Python reutiliza el contrato en su propia capa de adquisicion y almacenamiento; su guia registra las pruebas de software y los ensayos pendientes en Raspberry. La pagina USB sigue siendo util para diagnostico. La siguiente integracion corresponde a `feat/panel-web`.
+La validacion fisica de Uno/Nano permanece pendiente hasta completar esos puntos. El backend Python reutiliza el contrato en su propia capa de adquisicion y almacenamiento; su guia registra las pruebas de software y los ensayos pendientes en Raspberry. La pagina USB sigue siendo util para diagnostico. El panel de `feat/panel-web` ya integra esa API; ensayos/dataset, autorizacion y ML siguen pendientes.
 
 ## Fuentes tecnicas
 
