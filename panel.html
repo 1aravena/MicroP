@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Control y monitoreo de sensores desde Raspberry Pi · Grupo C" />
+    <title>Panel de sensores · Grupo C</title>
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="css/styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="page-header">
+        <div><p class="eyebrow">GRUPO C · SOLEMNE 2</p><h1>Panel de sensores</h1></div>
+        <label class="theme-switch"><input id="theme-switch" type="checkbox" /><span class="switch-track"><span class="switch-thumb"></span></span>Blanco y negro</label>
+      </header>
+      <section class="control-panel service-panel" aria-label="Estado de la Raspberry">
+        <div class="service-summary"><div><span>Raspberry</span><strong id="service-status" role="status">Conectando…</strong></div><div><span>Almacenamiento</span><strong id="storage-status">Comprobando…</strong></div></div>
+        <button id="refresh-ports" class="secondary" type="button" disabled>Actualizar puertos</button>
+        <p id="service-error" class="hint" hidden></p>
+      </section>
+      <div id="message" class="message" role="status" aria-live="polite" hidden></div>
+      <section id="boards" class="board-grid" aria-label="Control de las placas"></section>
+      <section class="section-heading"><h2>Sensores</h2><p>Hasta 300 lecturas recientes por placa</p></section>
+      <section id="sensors" class="sensor-grid" aria-label="Configuración y lecturas de sensores"></section>
+      <section class="control-panel capture-panel" aria-labelledby="captures-title">
+        <div class="section-heading"><h2 id="captures-title">Capturas guardadas</h2><label class="capture-filter">Origen<select id="capture-origin"><option value="">Todas las placas</option><option value="UNO">Uno</option><option value="NANO">Nano</option></select></label></div>
+        <p id="capture-error" class="hint" role="status" hidden></p>
+        <div class="table-scroll"><table class="capture-table"><thead><tr><th scope="col">Placa</th><th scope="col">Inicio</th><th scope="col">Estado</th><th scope="col">Lecturas</th><th scope="col">Archivo</th></tr></thead><tbody id="captures"><tr><td colspan="5">Cargando capturas…</td></tr></tbody></table></div>
+        <div class="pagination"><button id="captures-previous" class="secondary" type="button" disabled>Más recientes</button><span id="capture-page" role="status">Página 1</span><button id="captures-next" class="secondary" type="button" disabled>Más antiguas</button></div>
+      </section>
+      <section class="control-panel" aria-labelledby="incidents-title">
+        <div class="section-heading"><h2 id="incidents-title">Actividad e incidencias</h2><button id="download-incidents" class="secondary" type="button" disabled>Incidencias CSV</button></div>
+        <p id="incident-error" class="hint" role="status" hidden></p>
+        <ol id="incidents" class="incident-list"><li>Cargando actividad…</li></ol>
+      </section>
+      <noscript>Activa JavaScript para utilizar el panel.</noscript>
+    </main>
+    <script type="module" src="js/panel.js"></script>
+  </body>
+</html>

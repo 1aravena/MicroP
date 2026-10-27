@@ -224,13 +224,18 @@ class Store:
                 raise NotFound("Captura no encontrada.")
             return self._capture(row)
 
-    def page(self, table, *, after_id=0, limit=100, origin=None, capture_id=None, cutoff=None):
+    def page(self, table, *, after_id=0, limit=100, origin=None, capture_id=None, cutoff=None, order="asc"):
         if table not in ("captures", "samples", "incidents"):
             raise ValueError("Tabla no permitida.")
         if type(limit) is not int or not 1 <= limit <= 500 or type(after_id) is not int or after_id < 0:
             raise ValueError("Paginacion invalida.")
+        if order not in ("asc", "desc"):
+            raise ValueError("Orden invalido.")
         column = "ordinal" if table == "captures" else "id"
-        where, args = [f"{column}>?"], [after_id]
+        where, args = ["1=1"], []
+        if order == "asc" or after_id:
+            where.append(f"{column}{'>' if order == 'asc' else '<'}?")
+            args.append(after_id)
         for name, value in (("origin", origin), ("capture_id", capture_id)):
             if value is not None:
                 where.append(f"{name}=?")
@@ -239,7 +244,7 @@ class Store:
             where.append(f"{column}<=?")
             args.append(cutoff)
         with self.access() as db:
-            rows = db.execute(f"SELECT * FROM {table} WHERE {' AND '.join(where)} ORDER BY {column} LIMIT ?", (*args, limit)).fetchall()
+            rows = db.execute(f"SELECT * FROM {table} WHERE {' AND '.join(where)} ORDER BY {column} {order.upper()} LIMIT ?", (*args, limit)).fetchall()
         converter = {"captures": self._capture, "samples": self._sample, "incidents": self._event}[table]
         return {"items": [converter(row) for row in rows], "nextCursor": rows[-1][column] if rows else after_id}
 

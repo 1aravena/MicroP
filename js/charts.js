@@ -116,6 +116,10 @@ export function formatElapsedTime(milliseconds) {
   return hours ? `${String(hours).padStart(2, "0")}:${base}` : base;
 }
 
+export function formatChartTime(milliseconds, mode = "elapsed") {
+  return mode === "received" ? new Date(milliseconds).toLocaleTimeString("es-CL", { hour12: false }) : formatElapsedTime(milliseconds);
+}
+
 function formatValue(value, sensor, enabled) {
   if (value === null) return enabled === false ? "Desactivado" : "Lectura no disponible";
   const config = sensorConfig(sensor);
@@ -142,7 +146,8 @@ function nearestRowIndex(rows, timeMs) {
 }
 
 export class SensorCharts {
-  constructor() {
+  constructor({ timeMode = "elapsed" } = {}) {
+    this.timeMode = timeMode;
     this.rows = [];
     this.cards = Object.keys(SENSOR_CONFIG).map((sensor) => ({
       sensor,
@@ -242,7 +247,8 @@ export class SensorCharts {
     card.detail.hidden = false;
     const row = card.rows[card.selectedIndex];
     const value = row[sensorConfig(card.sensor).field];
-    card.detail.textContent = `${row.origin ?? ""} · muestra ${row.sequence ?? card.selectedIndex + 1} · recepción +${formatElapsedTime(row.timeMs)} · ${formatValue(value, card.sensor, row.enabled?.[card.sensor])}`;
+    const reception = this.timeMode === "received" ? new Date(row.timeMs).toLocaleString("es-CL") : `+${formatElapsedTime(row.timeMs)}`;
+    card.detail.textContent = `${row.origin ?? ""} · muestra ${row.sequence ?? card.selectedIndex + 1} · recepción ${reception} · ${formatValue(value, card.sensor, row.enabled?.[card.sensor])}`;
   }
 
   draw(card) {
@@ -302,10 +308,10 @@ export class SensorCharts {
     }
     context.textBaseline = "alphabetic";
     context.textAlign = "left";
-    context.fillText(formatElapsedTime(firstTime), left, rect.height - 7);
+    context.fillText(formatChartTime(firstTime, this.timeMode), left, rect.height - 7);
     if (lastTime !== firstTime) {
       context.textAlign = "right";
-      context.fillText(formatElapsedTime(lastTime), right, rect.height - 7);
+      context.fillText(formatChartTime(lastTime, this.timeMode), right, rect.height - 7);
     }
 
     context.strokeStyle = color("--chart-line");
