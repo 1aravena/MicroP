@@ -1,142 +1,129 @@
-# Deteccion y seguridad de acceso — Grupo 2
+# Deteccion y seguridad de acceso · Grupo C · Solemne 2
 
-Proyecto experimental de la Solemne 1. Un Arduino Uno adquiere cinco sensores y envia una muestra conjunta por segundo a una pagina web estatica mediante USB y Web Serial. La pagina permite configurar pines, activar sensores, ver lecturas y graficos temporales, y descargar la sesion como CSV sin backend ni almacenamiento remoto.
+Herramienta local para comprobar sensores conectados a **dos Arduino independientes**, configurar sus pines, consultar graficos y exportar mediciones e incidencias. Rama `feat/arduino-uno-nano`.
 
-## Sensores
+En esta etapa los Arduino se conectan por USB al **PC donde esta abierto el navegador**. Raspberry, Python, almacenamiento persistente, autorizacion de acceso y Machine Learning corresponden a etapas posteriores.
 
-| Sensor | Variable | Conexion de datos |
-| --- | --- | --- |
-| HC-SR04 | Distancia en cm | Trigger y Echo configurables |
-| HC-SR501 | Movimiento 0/1 | Pin digital configurable |
-| RCWL-0516 | Movimiento 0/1 | Pin digital configurable |
-| BH1750 / GY-30 | Iluminancia en lux | SDA=A4 y SCL=A5, fijos por I2C |
-| LM393 sonido | Evento acustico 0/1 | Pin digital configurable |
+## Distribucion y estado conocido
 
-Los pines configurables pueden ser D2 a D12. D0 y D1 quedan reservados para Serial y D13 no se utiliza. La interfaz impide que dos funciones **activas** compartan un pin.
+| Rol | Sensores | Sketch nuevo | Dependencias |
+| --- | --- | --- | --- |
+| UNO | HC-SR04, BH1750 y salida digital del modulo de sonido | `arduino/uno/uno.ino` | Core de placa, Wire, BH1750 de Christopher Laws |
+| NANO | HC-SR501 y RCWL-0516 | `arduino/nano/nano.ino` | Core de placa |
 
-## Dependencias Arduino
+Modelos exactos, pinout conectado, tensiones de los modulos y polaridad de sonido **pendientes de confirmar con quien tiene los equipos**. El repositorio anterior utiliza un LM393 digital; eso no confirma el modulo fisico actual. El rol que informa el firmware tampoco identifica el microcontrolador real.
 
-En Arduino IDE, abre **Herramientas > Administrar bibliotecas** e instala:
+La pagina propone Uno: Trigger D4, Echo D5, sonido DO D8; Nano: PIR D6 y radar D7. **Son sugerencias editables, no conexiones verificadas.** BH1750 utiliza SDA/SCL del bus I2C de la placa real; los pines A4/A5 del Uno clasico no se presentan como universales. Completar la [pauta de inventario y pruebas fisicas](docs/validacion-hardware.md) antes de declarar el montaje validado.
 
-- `BH1750` de Christopher Laws (claws).
-- `NewPing` de Tim Eckel.
+## Estructura y decisiones
 
-`BH1750` se utiliza en el programa integrado y en su prueba individual. `NewPing` se utiliza en `arduino/individuales/hc_sr04.ino`. El firmware integrado lee el HC-SR04 directamente con `pulseIn()` y un tiempo maximo: NewPing fija Trigger/Echo al construir el objeto y no ofrece setters para cambiarlos durante la ejecucion. Evitar reconstrucciones dinamicas mantiene el codigo y la memoria del Uno simples y predecibles.
+- `arduino/uno/` y `arduino/nano/`: dos sketches especificos; no inicializan sensores del otro rol. No requieren una biblioteca propia del proyecto.
+- `js/protocol.js`: contrato de mensajes, configuracion, validacion y CSV.
+- `js/serial.js`: una conexion Web Serial por placa, con aislamiento de comandos y errores.
+- `js/board.js`: estado y capturas por placa; no depende del DOM y recibe el transporte por inyeccion.
+- `js/app.js`: controles, lecturas y exportaciones de la pagina.
+- `js/charts.js`: graficos separados por origen, con tiempo de recepcion comun del PC.
+- `tests/`: pruebas automatizadas y perifericos simulados exclusivos de prueba.
+- `docs/`: especificacion de protocolo y pauta fisica pendiente.
 
-## Conexion sugerida
+El firmware integrado anterior y los cinco programas individuales se conservan en `arduino/integrado/` y `arduino/individuales/` como referencia. **La pagina nueva requiere los firmwares nuevos con protocolo 2**; ya no controla el montaje anterior de cinco sensores en un solo Uno. `NewPing` sigue siendo dependencia de la prueba individual antigua del HC-SR04, no de los firmwares nuevos.
 
-Todos los modulos y el Arduino deben compartir GND.
+## Preparar los equipos y abrir la pagina
 
-| Modulo | Alimentacion | Señal predeterminada |
-| --- | --- | --- |
-| HC-SR04 | VCC a 5V, GND a GND | Trigger D4, Echo D5 |
-| HC-SR501 | VCC a 5V, GND a GND | OUT D6 |
-| RCWL-0516 | VIN a 5V, GND a GND | OUT D7 |
-| BH1750 / GY-30 | VCC y GND segun el modulo | SDA A4, SCL A5 |
-| LM393 sonido | VCC a 5V, GND a GND | DO D8 |
+1. Confirmar el modelo exacto de cada placa, alimentacion, niveles logicos y cableado. No manipular conexiones energizadas de forma insegura.
+2. En Arduino IDE, instalar el paquete de cada placa y `BH1750` de Christopher Laws desde el gestor de bibliotecas. Wire forma parte del core compatible.
+3. Compilar y cargar `arduino/uno/uno.ino` en la placa que tiene distancia, luz y sonido; cargar `arduino/nano/nano.ino` en la que tiene PIR y radar. Seleccionar los modelos y puertos reales. Registrar consumo de memoria y versiones.
+4. Cerrar los Monitores Serial y otras aplicaciones que ocupen los puertos.
+5. Abrir una terminal en la raiz de este repositorio y ejecutar:
 
-Si cambias un pin en la pagina, mueve tambien el cable correspondiente. Los potenciometros o ajustes fisicos de PIR y LM393 no se controlan por software.
-
-## Cargar el firmware integrado
-
-1. Abre `arduino/integrado/integrado.ino` en Arduino IDE.
-2. Selecciona **Arduino Uno** y el puerto correcto.
-3. Instala la biblioteca BH1750 si falta.
-4. Compila y carga el sketch.
-5. Cierra el Monitor Serial antes de conectar desde la pagina; un puerto no puede ser usado por ambas aplicaciones al mismo tiempo.
-
-El firmware usa 115200 baudios. Al iniciar una captura espera 1000 ms antes de la primera fila y luego programa las lecturas con `millis()`. No se detiene automaticamente al alcanzar 300 registros.
-
-## Abrir la pagina localmente
-
-Web Serial requiere un contexto seguro. Usa Chrome de escritorio y sirve esta carpeta desde `localhost`, por ejemplo:
-
-```bash
-python3 -m http.server 8000
+```powershell
+python -m http.server 8000 --bind 127.0.0.1
 ```
 
-Abre `http://localhost:8000`. No abras `index.html` directamente porque los modulos JavaScript pueden ser bloqueados por el navegador.
+6. Abrir `http://127.0.0.1:8000` en Chrome de escritorio. No abrir el HTML directamente. En sistemas que utilizan el comando `python3`, reemplazar `python` por `python3`.
 
-## Uso durante la demostracion
+La pagina tambien puede servirse por HTTPS, por ejemplo con GitHub Pages. En ese caso sigue leyendo los Arduino conectados al equipo de quien la abre: **no accede a los USB de otro computador ni envia las mediciones a GitHub**. Web Serial requiere un contexto seguro y permiso del usuario para cada puerto.
 
-1. Pulsa **Conectar Arduino** y elige el puerto USB de la placa.
-2. Activa solamente los sensores que quieras probar.
-3. Selecciona los pines que coincidan con el cableado. A4/A5 del BH1750 no cambian.
-4. Pulsa **Aplicar configuracion**. Arduino vuelve a validar rango, duplicados y presencia del BH1750 cuando esta activo.
-5. Pulsa **Iniciar captura**. Los selectores de pines quedan bloqueados.
-6. Observa las lecturas. Los interruptores siguen disponibles; un cambio valido se envia con `ENABLE`.
-7. Para cambiar pines, pulsa **Detener captura**, modifica, aplica y vuelve a iniciar.
-8. Mantiene la sesion oficial aproximadamente cinco minutos hasta ver `✓ Minimo de 300 registros alcanzado`.
-9. Deten la captura y pulsa **Descargar CSV**.
+## Procedimiento de uso
 
-Cada nueva captura limpia las filas de la captura anterior. Antes de iniciar una nueva, descarga cualquier sesion que necesites conservar. Una desconexion fisica detiene el estado de captura, pero las filas ya recibidas siguen disponibles para descarga mientras no se recargue la pagina.
+1. Pulsar **Conectar UNO**, seleccionar su puerto y esperar la identificacion. Repetir con NANO si se probaran ambos. Se puede utilizar una sola placa.
+2. Revisar los pines en las tarjetas de sus sensores y seleccionar cuales estaran activos. Los sensores solo pueden pertenecer a su rol. Un numero de pin puede repetirse en placas distintas.
+3. Pulsar **Aplicar configuracion** de cada placa y comprobar la confirmacion. Si falta el BH1750 y esta activo, la configuracion se rechaza; revisar el cableado o desactivarlo explicitamente para una prueba parcial.
+4. Pulsar **Iniciar captura** en cada placa que se quiera probar. Cada START confirmado crea una captura identificable, secuencia nueva y reloj relativo nuevo.
+5. Observar lecturas y graficos. Los pines quedan bloqueados durante la captura; los interruptores permiten activar/desactivar sensores con ACK confirmado.
+6. Pulsar **Detener** para cambiar pines y volver a configurar. Las capturas anteriores se conservan para exportacion. Cada grafico muestra solo la captura actual de la placa que le corresponde.
+7. Descargar **mediciones CSV** e **incidencias CSV** antes de recargar o cerrar la pestaña. El registro visible muestra las ultimas 15 incidencias; su descarga incluye todas.
+8. Ante desconexion, reinicio o comando sin respuesta, revisar el estado, reconectar si corresponde y aplicar configuracion nuevamente. La otra placa continua de forma independiente.
 
-Cada tarjeta grafica toda la captura del sensor. Señala un punto o enfoca el grafico y usa las flechas izquierda/derecha para consultar tiempo y valor exactos; las flechas Inicio/Fin llevan a la primera o ultima muestra. Los graficos dejan espacios cuando un sensor esta desactivado. Distancia e iluminancia muestran minimo y maximo; los sensores digitales cuentan episodios al pasar de 0 a 1. El interruptor **Blanco y negro** cambia a fondo negro y trazos blancos y recuerda la preferencia al recargar.
+Se marca ausencia de datos recientes despues de 3,5 segundos sin muestras durante una captura, incluso si todavia no llego la primera. Las lecturas antiguas permanecen en el historial, pero no se muestran como lectura actual de una placa desconectada o detenida.
 
-## Archivo CSV
+## Que representan los datos
 
-La cabecera es siempre:
+La adquisicion es instantanea, aproximadamente una muestra por segundo y por placa, sin generar filas artificiales para recuperar intervalos perdidos.
+
+- Distancia: cm entre 2 y 400; sin eco valido es NA, nunca cero centimetros.
+- Luz: lux segun BH1750; un error no elimina el resto de la fila del Uno.
+- PIR/radar: estados digitales de los modulos; respetar calentamiento, retencion y ajustes fisicos.
+- Sonido: nivel DO bruto 0/1. Verificar su polaridad. No representa dB, volumen ni cantidad total de eventos. A 1 Hz pueden perderse pulsos breves.
+- NA: sensor ajeno al rol, desactivado o lectura invalida. La pagina distingue esos estados mediante el origen y la configuracion confirmada. Las incidencias registran lecturas faltantes y errores.
+
+No se inventan datos si falta una placa ni se completa una fila con valores anteriores de otra. Las pruebas automatizadas usan mensajes ilustrativos y **no alimentan la pagina de produccion**. Los contadores indican filas recibidas; no certifican observaciones de prueba ML ni un dataset etiquetado.
+
+## Protocolo y archivos CSV
+
+Los firmwares usan 115200 baudios. El navegador identifica version/rol con INFO, confirma STOP y solicita CONFIG antes de START. [Contrato completo, comandos, ejemplos y recuperacion](docs/protocolo-v2.md).
+
+Mensaje emitido por la placa:
 
 ```text
-tiempo_ms,distancia_cm,pir_estado,radar_estado,lux,sonido_estado
+origen,secuencia,tiempo_ms,distancia_cm,pir_estado,radar_estado,lux,sonido_estado
 ```
 
-| Columna | Significado |
-| --- | --- |
-| `tiempo_ms` | Milisegundos desde que Arduino inicio la captura |
-| `distancia_cm` | Distancia HC-SR04 en centimetros; 0.00 indica que no hubo eco dentro del limite |
-| `pir_estado` | HC-SR501: 0 sin movimiento, 1 con movimiento |
-| `radar_estado` | RCWL-0516: 0 sin movimiento, 1 con movimiento |
-| `lux` | Iluminancia BH1750 en lux |
-| `sonido_estado` | LM393: 0 sin evento, 1 evento detectado |
-
-Un sensor desactivado ocupa `NA`; el orden y la cantidad de columnas nunca cambian. La pagina solo guarda filas validas recibidas realmente desde Arduino y descarta una linea malformada sin detener la sesion.
-
-## Protocolo Serial
-
-La pagina envia una instruccion por linea:
+Cabecera del CSV descargado:
 
 ```text
-CONFIG,trigger,echo,pir,radar,sonido,hc_on,pir_on,radar_on,lux_on,sonido_on
-START
-STOP
-ENABLE,PIR,1
+fecha_hora_recepcion,captura_id,origen,secuencia,tiempo_ms,distancia_cm,pir_estado,radar_estado,lux,sonido_estado
 ```
 
-Las respuestas de control comienzan con `@OK` o `@ERR`. Las muestras no llevan prefijo y siempre contienen las seis columnas del CSV, por ejemplo:
+`fecha_hora_recepcion` es UTC del PC receptor; `captura_id` identifica cada START confirmado. `tiempo_ms` mantiene el reloj original de la placa. Los graficos usan otro tiempo interno, monotono y comun de recepcion del PC, para no aparentar sincronizacion entre relojes Arduino.
 
-```text
-1000,84.30,0,0,182.50,0
-2000,NA,1,NA,NA,0
+CSV de incidencias: `fecha_hora,origen,tipo,descripcion`. Incluye configuraciones confirmadas, controles, errores, reinicios y saltos de secuencia. **Todo vive en memoria hasta descargarlo**; esta rama no guarda archivos automaticamente en Raspberry ni en un servidor.
+
+## Pruebas de software
+
+Requiere Node.js 20 o posterior. No hay dependencias npm de ejecucion ni es necesario `npm install`.
+
+```powershell
+npm test
 ```
 
-## Pruebas individuales
+Las pruebas cubren validacion y parsing, transporte fragmentado, timeout, identificacion, doble asignacion de puerto, ACK de ENABLE, reinicios, capturas sucesivas, errores parciales, exportacion y graficos por origen.
 
-Los cinco programas requeridos estan en subcarpetas de `arduino/individuales/`. Arduino exige que el archivo principal tenga el mismo nombre que su carpeta y compila juntos todos los `.ino` ubicados en un mismo directorio; por eso cada prueba tiene su propia carpeta:
+Si se encuentra `g++` (o el compilador indicado en `CXX`), tambien se compilan y ejecutan los dos sketches **en modo nativo con dobles de Arduino, Wire y BH1750** para comprobar comportamiento del parser y adquisicion. Si no esta disponible, esas dos pruebas se omiten explicitamente. Estas pruebas no compilan el core real ni miden flash/RAM de las placas.
 
-- `hc_sr04/hc_sr04.ino`
-- `hc_sr501/hc_sr501.ino`
-- `rcwl0516/rcwl0516.ino`
-- `bh1750/bh1750.ino`
-- `lm393_sonido/lm393_sonido.ino`
+La interfaz se comprobo adicionalmente en Chrome de escritorio y vista movil, incluyendo dos puertos simulados, capturas independientes, desactivacion de un sensor, desconexion aislada y descarga. Esa comprobacion usa fixtures, no hardware real.
 
-Cada programa lee solamente su sensor y muestra un resultado comprensible en el Monitor Serial a 115200 baudios. Carga un sketch a la vez y conecta el modulo al pin indicado en sus comentarios.
+## Hoja de ruta de esta rama
 
-## Publicar en GitHub Pages
+- [x] Inventario de lo conocido y tabla de cableado pendiente.
+- [x] Protocolo 2 documentado y ejemplos de prueba identificados.
+- [x] Dos firmwares y manejo de lecturas parciales.
+- [x] Transporte/controladores independientes y pruebas automatizadas.
+- [x] Pagina para Uno, Nano o ambas placas; graficos y temas.
+- [x] Exportacion de capturas e incidencias con origen y tiempos.
+- [ ] Confirmar modelos, cableado y polaridad del sonido con los equipos.
+- [ ] Compilar usando los cores de los modelos reales y registrar memoria/versiones.
+- [ ] Completar y adjuntar evidencias de la pauta fisica.
 
-1. Sube esta carpeta a un repositorio de GitHub.
-2. En el repositorio abre **Settings > Pages**.
-3. En **Build and deployment**, selecciona **Deploy from a branch**.
-4. Elige la rama principal y la carpeta `/ (root)`.
-5. Abre la URL HTTPS publicada con Chrome de escritorio.
+La validacion fisica de la rama permanece pendiente hasta completar esos puntos. La siguiente rama trasladara la recepcion/almacenamiento al backend Python de Raspberry manteniendo este contrato. La pagina USB seguira siendo util para diagnostico.
 
-GitHub Pages solo sirve los archivos estaticos; los datos viajan entre el navegador y el Arduino local y no se suben a GitHub.
+## Fuentes tecnicas
 
-## Secuencia recomendada de evaluacion
+- [Arduino: estructura de sketches](https://docs.arduino.cc/arduino-cli/sketch-specification/).
+- [Chrome: Web Serial](https://developer.chrome.com/docs/capabilities/serial).
+- [Biblioteca BH1750 de Christopher Laws](https://github.com/claws/BH1750).
+- [Hoja de datos HC-SR04 de ElecFreaks](https://cdn.sparkfun.com/datasheets/Sensors/Proximity/HCSR04.pdf).
+- [HC-SR501: documentacion Joy-IT](https://joy-it.net/en/products/SEN-HC-SR501).
+- [RCWL-0516: documentacion Arduino](https://store.arduino.cc/products/microwave-motion-radar).
 
-- Prueba HC-SR04 con al menos dos distancias.
-- Prueba presencia y ausencia con HC-SR501.
-- Prueba RCWL-0516 y compara su respuesta con el PIR.
-- Prueba al menos dos niveles de iluminacion con BH1750.
-- Ajusta fisicamente el LM393 y genera un cambio controlado 0/1.
-- Activa los cinco sensores y registra 300 o mas filas durante la adquisicion integrada.
+Utilizar estas fuentes como referencia del componente y contrastarlas con el modelo y modulo realmente instalado.

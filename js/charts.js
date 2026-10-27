@@ -1,9 +1,11 @@
+import { SENSOR_ORIGIN } from "./protocol.js";
+
 const SENSOR_CONFIG = {
   hc: { field: "distanceCm", kind: "continuous", unit: "cm" },
   pir: { field: "pir", kind: "binary", active: "Detectado", inactive: "No detectado" },
   radar: { field: "radar", kind: "binary", active: "Detectado", inactive: "No detectado" },
   lux: { field: "lux", kind: "continuous", unit: "lux" },
-  sound: { field: "sound", kind: "binary", active: "Evento detectado", inactive: "Sin evento" },
+  sound: { field: "sound", kind: "binary", active: "Nivel alto DO", inactive: "Nivel bajo DO" },
 };
 
 const numberFormat = new Intl.NumberFormat("es-CL", { maximumFractionDigits: 2 });
@@ -15,7 +17,12 @@ function sensorConfig(sensor) {
   return config;
 }
 
+export function rowsForSensor(rows, sensor) {
+  return rows.filter(row => row.origin === undefined || row.origin === SENSOR_ORIGIN[sensor]);
+}
+
 export function buildSeriesSegments(rows, sensor) {
+  rows = rowsForSensor(rows, sensor);
   const { field } = sensorConfig(sensor);
   const segments = [];
   let current = [];
@@ -26,6 +33,10 @@ export function buildSeriesSegments(rows, sensor) {
       if (current.length) segments.push(current);
       current = [];
     } else {
+      if (current.length && row.timeMs - current.at(-1).timeMs > 3500) {
+        segments.push(current);
+        current = [];
+      }
       current.push({ index, timeMs: row.timeMs, value });
     }
   });
@@ -34,6 +45,7 @@ export function buildSeriesSegments(rows, sensor) {
 }
 
 export function calculateSensorStats(rows, sensor) {
+  rows = rowsForSensor(rows, sensor);
   const { field, kind } = sensorConfig(sensor);
   if (kind === "continuous") {
     let min = Infinity;
@@ -104,8 +116,8 @@ export function formatElapsedTime(milliseconds) {
   return hours ? `${String(hours).padStart(2, "0")}:${base}` : base;
 }
 
-function formatValue(value, sensor) {
-  if (value === null) return "Desactivado";
+function formatValue(value, sensor, enabled) {
+  if (value === null) return enabled === false ? "Desactivado" : "Lectura no disponible";
   const config = sensorConfig(sensor);
   if (config.kind === "continuous") return `${numberFormat.format(value)} ${config.unit}`;
   return `${value} · ${value ? config.active : config.inactive}`;
@@ -139,6 +151,7 @@ export class SensorCharts {
       detail: document.querySelector(`#${sensor}-chart-detail`),
       stats: document.querySelector(`#${sensor}-stats`),
       selectedIndex: null,
+      rows: [],
     }));
     this.frameRequested = false;
 
@@ -148,7 +161,7 @@ export class SensorCharts {
       card.canvas.addEventListener("keydown", (event) => this.selectFromKeyboard(card, event));
       card.canvas.addEventListener("focus", () => {
         card.detail.setAttribute("aria-live", "polite");
-        if (this.rows.length && card.selectedIndex === null) this.select(card, this.rows.length - 1);
+        if (card.rows.length && card.selectedIndex === null) this.select(card, card.rows.length - 1);
       });
       card.canvas.addEventListener("blur", () => card.detail.setAttribute("aria-live", "off"));
     }
@@ -165,13 +178,15 @@ export class SensorCharts {
   setRows(rows, { resetSelection = false } = {}) {
     this.rows = rows;
     for (const card of this.cards) {
-      if (resetSelection || !rows.length || card.selectedIndex >= rows.length) card.selectedIndex = null;
-      const stats = calculateSensorStats(rows, card.sensor);
+      const previousCapture = card.rows.at(-1)?.captureId;
+      card.rows = rowsForSensor(rows, card.sensor);
+      if (resetSelection || previousCapture !== card.rows.at(-1)?.captureId || !card.rows.length || card.selectedIndex >= card.rows.length) card.selectedIndex = null;
+      const stats = calculateSensorStats(card.rows, card.sensor);
       const config = sensorConfig(card.sensor);
-      card.stats.textContent = !stats.count ? "Sin datos" : config.kind === "continuous"
+      card.stats.textContent = !stats.count ? "—" : config.kind === "continuous"
         ? `Mín ${numberFormat.format(stats.min)} · Máx ${numberFormat.format(stats.max)}`
-        : `${stats.episodes} ${stats.episodes === 1 ? "episodio" : "episodios"}`;
-      card.empty.textContent = rows.length ? "Sin muestras activas de este sensor." : "Inicia la captura para ver el historial.";
+        : `${stats.episodes} ${card.sensor === "sound" ? "cambios 0→1" : "episodios"}`;
+      card.empty.textContent = card.rows.length ? "Sin lecturas disponibles" : "Sin datos";
       this.updateDetail(card);
     }
     this.requestDraw();
@@ -191,21 +206,21 @@ export class SensorCharts {
   }
 
   selectFromPointer(card, event) {
-    if (!this.rows.length) return;
+    if (!card.rows.length) return;
     const rect = card.canvas.getBoundingClientRect();
     const plotWidth = Math.max(1, rect.width - CHART_PADDING.left - CHART_PADDING.right);
     const fraction = Math.max(0, Math.min(1, (event.clientX - rect.left - CHART_PADDING.left) / plotWidth));
     const firstTime = this.rows[0].timeMs;
     const lastTime = this.rows[this.rows.length - 1].timeMs;
-    this.select(card, nearestRowIndex(this.rows, firstTime + fraction * (lastTime - firstTime)));
+    this.select(card, nearestRowIndex(card.rows, firstTime + fraction * (lastTime - firstTime)));
   }
 
   selectFromKeyboard(card, event) {
     const moves = { ArrowLeft: -1, ArrowRight: 1 };
     if (!(event.key in moves) && event.key !== "Home" && event.key !== "End") return;
     event.preventDefault();
-    if (!this.rows.length) return;
-    const lastIndex = this.rows.length - 1;
+    if (!card.rows.length) return;
+    const lastIndex = card.rows.length - 1;
     const next = event.key === "Home" ? 0 : event.key === "End" ? lastIndex
       : Math.max(0, Math.min(lastIndex, (card.selectedIndex ?? lastIndex) + moves[event.key]));
     this.select(card, next);
@@ -219,13 +234,15 @@ export class SensorCharts {
   }
 
   updateDetail(card) {
-    if (card.selectedIndex === null || !this.rows[card.selectedIndex]) {
-      card.detail.textContent = "Señala el gráfico o usa las flechas para consultar una muestra.";
+    if (card.selectedIndex === null || !card.rows[card.selectedIndex]) {
+      card.detail.textContent = "";
+      card.detail.hidden = true;
       return;
     }
-    const row = this.rows[card.selectedIndex];
+    card.detail.hidden = false;
+    const row = card.rows[card.selectedIndex];
     const value = row[sensorConfig(card.sensor).field];
-    card.detail.textContent = `Muestra ${card.selectedIndex + 1} · ${formatElapsedTime(row.timeMs)} · ${formatValue(value, card.sensor)}`;
+    card.detail.textContent = `${row.origin ?? ""} · muestra ${row.sequence ?? card.selectedIndex + 1} · recepción +${formatElapsedTime(row.timeMs)} · ${formatValue(value, card.sensor, row.enabled?.[card.sensor])}`;
   }
 
   draw(card) {
@@ -244,12 +261,12 @@ export class SensorCharts {
     context.setTransform(dpr, 0, 0, dpr, 0, 0);
     context.clearRect(0, 0, rect.width, rect.height);
 
-    const segments = buildSeriesSegments(this.rows, card.sensor);
+    const segments = buildSeriesSegments(card.rows, card.sensor);
     card.empty.hidden = segments.length > 0;
     if (!segments.length) return;
 
     const config = sensorConfig(card.sensor);
-    const stats = calculateSensorStats(this.rows, card.sensor);
+    const stats = calculateSensorStats(card.rows, card.sensor);
     const left = CHART_PADDING.left;
     const right = rect.width - CHART_PADDING.right;
     const top = CHART_PADDING.top;
@@ -280,7 +297,7 @@ export class SensorCharts {
       context.moveTo(left, axisY);
       context.lineTo(right, axisY);
       context.stroke();
-      const label = config.kind === "binary" ? (value ? "1 Sí" : "0 No") : numberFormat.format(value);
+      const label = config.kind === "binary" ? (card.sensor === "sound" ? `${value} DO` : value ? "1 Sí" : "0 No") : numberFormat.format(value);
       context.fillText(label, left - 7, axisY);
     }
     context.textBaseline = "alphabetic";
@@ -314,7 +331,7 @@ export class SensorCharts {
     }
 
     if (card.selectedIndex !== null) {
-      const row = this.rows[card.selectedIndex];
+      const row = card.rows[card.selectedIndex];
       const selectedValue = row[config.field];
       context.strokeStyle = color("--chart-marker");
       context.setLineDash([4, 4]);

@@ -1,350 +1,183 @@
-import { ALLOWED_PINS, buildCsv, parseSampleLine, serializeConfig, validateConfig } from "./protocol.js";
+import { ROLES, ALLOWED_PINS, SENSOR_ORIGIN, defaultConfig, validateConfig, buildCsv, buildIncidentCsv } from "./protocol.js";
 import { SerialConnection } from "./serial.js";
+import { BoardController } from "./board.js";
 import { SensorCharts } from "./charts.js";
 
-const TARGET_RECORDS = 300;
-const THEME_STORAGE_KEY = "microp-theme";
-const SENSOR_IDS = {
-  "hc-enabled": "HC",
-  "pir-enabled": "PIR",
-  "radar-enabled": "RADAR",
-  "lux-enabled": "LUX",
-  "sound-enabled": "SOUND",
+const sensors = {
+  hc: { title: "HC-SR04", type: "Distancia · cm", pins: [["hcTrigger", "Trigger"], ["hcEcho", "Echo"]] },
+  lux: { title: "BH1750", type: "Luz · lux", pins: [], hint: "I²C · SDA y SCL" },
+  sound: { title: "Sonido · DO", type: "Digital · 0/1", pins: [["soundPin", "Pin DO"]], hint: "Verifica la polaridad de DO." },
+  pir: { title: "HC-SR501", type: "Movimiento · PIR", pins: [["pirPin", "Pin OUT"]] },
+  radar: { title: "RCWL-0516", type: "Movimiento · radar", pins: [["radarPin", "Pin OUT"]] },
 };
-const SENSOR_KEYS = { HC: "hc", PIR: "pir", RADAR: "radar", LUX: "lux", SOUND: "sound" };
-
-const elements = {
-  connectionStatus: document.querySelector("#connection-status"),
-  phaseStatus: document.querySelector("#phase-status"),
-  message: document.querySelector("#message"),
-  connect: document.querySelector("#connect-btn"),
-  apply: document.querySelector("#apply-btn"),
-  start: document.querySelector("#start-btn"),
-  stop: document.querySelector("#stop-btn"),
-  download: document.querySelector("#download-btn"),
-  count: document.querySelector("#records-count"),
-  elapsed: document.querySelector("#elapsed-time"),
-  target: document.querySelector("#target-message"),
-  theme: document.querySelector("#theme-switch"),
-  pinSelects: [...document.querySelectorAll(".pin-select")],
-  toggles: [...document.querySelectorAll(".toggle input")],
-  values: {
-    hc: document.querySelector("#hc-value"),
-    pir: document.querySelector("#pir-value"),
-    radar: document.querySelector("#radar-value"),
-    lux: document.querySelector("#lux-value"),
-    sound: document.querySelector("#sound-value"),
-  },
-};
-
-const state = {
-  connected: false,
-  configured: false,
-  capturing: false,
-  commandBusy: false,
-  phase: "disconnected",
-  rows: [],
-  appliedEnabled: { hc: true, pir: true, radar: true, lux: true, sound: true },
-  captureStartedAt: 0,
-  stoppedElapsedMs: 0,
-};
-
-try {
-  elements.theme.checked = localStorage.getItem(THEME_STORAGE_KEY) === "mono";
-} catch {
-  elements.theme.checked = false;
+const boardContainer = document.querySelector("#boards");
+const sensorContainer = document.querySelector("#sensors");
+for (const origin of ROLES) {
+  boardContainer.insertAdjacentHTML("beforeend", `<article class="control-panel board-panel" id="${origin}-panel">
+    <div class="control-heading"><div><p class="sensor-code">${origin === "UNO" ? "DISTANCIA · LUZ · SONIDO" : "PIR · MICROONDAS"}</p><h2>Arduino ${origin === "UNO" ? "Uno" : "Nano"}</h2></div><span id="${origin}-status" class="status-badge">Desconectado</span></div>
+    <div class="button-row"><button id="${origin}-connect" type="button">Conectar ${origin}</button><button id="${origin}-disconnect" class="secondary" type="button" disabled>Desconectar</button></div>
+    <div class="button-row"><button id="${origin}-configure" class="secondary" type="button" disabled>Aplicar configuración</button><button id="${origin}-start" type="button" disabled>Iniciar captura</button><button id="${origin}-stop" class="secondary" type="button" disabled>Detener</button></div>
+    <div class="board-summary"><div><span>Captura actual</span><strong id="${origin}-count">0 lecturas</strong></div><div><span>Recepción</span><strong id="${origin}-age">Sin datos</strong></div></div>
+    <p class="hint" id="${origin}-capture" hidden></p></article>`);
 }
-document.documentElement.dataset.theme = elements.theme.checked ? "mono" : "color";
-const charts = new SensorCharts();
+const drafts = Object.fromEntries(ROLES.map(origin => [origin, defaultConfig(origin)]));
+for (const [key, sensor] of Object.entries(sensors)) {
+  const origin = SENSOR_ORIGIN[key];
+  sensorContainer.insertAdjacentHTML("beforeend", `<article class="sensor-card" data-origin="${origin}">
+    <div class="sensor-heading"><div><p class="sensor-code">${origin} · ${sensor.type}</p><h2>${sensor.title}</h2></div><label class="toggle"><input id="${key}-enabled" type="checkbox" aria-label="Usar ${sensor.title}" checked /><span>Usar</span></label></div>
+    ${sensor.pins.length ? `<div class="pin-row">${sensor.pins.map(([field, label]) => `<label>${label}<select id="${field}" class="pin-select" aria-label="${origin} ${label}">${ALLOWED_PINS.map(pin => `<option value="${pin}">D${pin}</option>`).join("")}</select></label>`).join("")}</div>` : ""}
+    ${sensor.hint ? `<p class="hint">${sensor.hint}</p>` : ""}<p class="reading"><span>Lectura</span><strong id="${key}-value">Sin conexión</strong></p>
+    <div class="sensor-chart"><div class="chart-heading"><span>Historial</span><strong id="${key}-stats">—</strong></div><div class="chart-frame"><canvas id="${key}-chart" class="chart-canvas" tabindex="0" role="img" aria-label="Historial ${sensor.title}; consulta con flechas" aria-describedby="${key}-chart-detail"></canvas><p id="${key}-chart-empty" class="chart-empty">Sin datos</p></div><p id="${key}-chart-detail" class="chart-detail" hidden></p></div>
+  </article>`);
+}
 
-elements.theme.addEventListener("change", () => {
-  document.documentElement.dataset.theme = elements.theme.checked ? "mono" : "color";
-  try {
-    localStorage.setItem(THEME_STORAGE_KEY, elements.theme.checked ? "mono" : "color");
-  } catch {
-    // El cambio visual funciona aunque el navegador bloquee el almacenamiento.
-  }
+const theme = document.querySelector("#theme-switch");
+try { theme.checked = localStorage.getItem("microp-theme") === "mono"; } catch { /* Preferencia opcional. */ }
+document.documentElement.dataset.theme = theme.checked ? "mono" : "color";
+const charts = new SensorCharts();
+theme.addEventListener("change", () => {
+  document.documentElement.dataset.theme = theme.checked ? "mono" : "color";
+  try { localStorage.setItem("microp-theme", theme.checked ? "mono" : "color"); } catch { /* Preferencia opcional. */ }
   charts.redraw();
 });
 
-for (const select of elements.pinSelects) {
-  for (const pin of ALLOWED_PINS) select.add(new Option(`D${pin}`, String(pin)));
-  select.value = select.dataset.default;
+const epoch = performance.now();
+const boards = {};
+const incidents = [];
+let ready = false;
+let downloadedRows = 0;
+function showMessage(message, level = "info") {
+  const element = document.querySelector("#message");
+  element.textContent = message;
+  element.dataset.level = level;
+  element.hidden = !message;
 }
-
-const serial = new SerialConnection({
-  onLine: handleSerialLine,
-  onDisconnect: () => setDisconnected("Arduino desconectado. La captura fue detenida de forma segura."),
-  onError: (error) => showMessage(`Error Serial: ${friendlyError(error)}`, "error"),
-});
-
-function getConfig() {
-  return {
-    hcTrigger: Number(document.querySelector("#hc-trigger").value),
-    hcEcho: Number(document.querySelector("#hc-echo").value),
-    pirPin: Number(document.querySelector("#pir-pin").value),
-    radarPin: Number(document.querySelector("#radar-pin").value),
-    soundPin: Number(document.querySelector("#sound-pin").value),
-    enabled: {
-      hc: document.querySelector("#hc-enabled").checked,
-      pir: document.querySelector("#pir-enabled").checked,
-      radar: document.querySelector("#radar-enabled").checked,
-      lux: document.querySelector("#lux-enabled").checked,
-      sound: document.querySelector("#sound-enabled").checked,
-    },
-  };
+function recordIncident(item) {
+  incidents.push(item);
+  const list = document.querySelector("#incidents");
+  list.replaceChildren(...incidents.slice(-15).reverse().map(incident => {
+    const li = document.createElement("li");
+    li.textContent = `${new Date(incident.at).toLocaleTimeString("es-CL")} · ${incident.origin} · ${incident.type}: ${incident.description}`;
+    return li;
+  }));
+  render(false);
 }
-
-function render() {
-  elements.connectionStatus.textContent = state.connected ? "Conectado" : "Desconectado";
-  elements.phaseStatus.textContent = phaseLabel(state.phase);
-  elements.phaseStatus.dataset.phase = state.phase;
-
-  elements.connect.disabled = state.connected || state.commandBusy || !SerialConnection.isSupported();
-  elements.apply.disabled = !state.connected || state.capturing || state.commandBusy;
-  elements.start.disabled = !state.connected || !state.configured || state.capturing || state.commandBusy;
-  elements.stop.disabled = !state.connected || !state.capturing || state.commandBusy;
-  elements.download.disabled = state.rows.length === 0;
-
-  for (const select of elements.pinSelects) select.disabled = state.capturing || state.commandBusy;
-  for (const toggle of elements.toggles) toggle.disabled = !state.connected || state.commandBusy;
-
-  elements.count.textContent = `${state.rows.length} / ${TARGET_RECORDS}`;
-  const remaining = Math.max(0, TARGET_RECORDS - state.rows.length);
-  elements.target.textContent = remaining === 0 ? "✓ Minimo de 300 registros alcanzado" : `Faltan ${remaining} registros`;
-  elements.target.classList.toggle("reached", remaining === 0);
-  renderElapsed();
-}
-
-function phaseLabel(phase) {
-  return {
-    disconnected: "Desconectado",
-    connected: "Conectado",
-    configured: "Configurado",
-    capturing: "Capturando",
-    stopped: "Detenido",
-  }[phase];
-}
-
-function showMessage(text, level = "info") {
-  elements.message.textContent = text;
-  elements.message.dataset.level = level;
-}
-
-function friendlyError(error) {
-  const message = error?.message || String(error);
-  const serialErrors = {
-    "@ERR,CONFIG,FORMAT": "el comando de configuracion tiene un formato invalido.",
-    "@ERR,CONFIG,PIN_RANGE": "Arduino rechazo un pin fuera de D2-D12.",
-    "@ERR,CONFIG,DUPLICATE_PIN": "Arduino detecto un pin repetido entre funciones activas.",
-    "@ERR,CONFIG,BH1750_NOT_FOUND": "no se detecto el BH1750 en el bus I2C.",
-    "@ERR,STATE,NOT_CONFIGURED": "primero debes aplicar una configuracion valida.",
-    "@ERR,STATE,CAPTURE_ACTIVE": "deten la captura antes de cambiar la configuracion.",
-    "@ERR,ENABLE,FORMAT": "el comando para activar el sensor es invalido.",
-    "@ERR,COMMAND,TOO_LONG": "Arduino descarto un comando demasiado largo.",
-    "@ERR,READ,BH1750": "fallo una lectura del BH1750; la fila incompleta no fue registrada.",
-    "@ERR,COMMAND,UNKNOWN": "Arduino no reconoce el comando enviado.",
-  };
-  return serialErrors[message] || message;
-}
-
-function markConfigurationPending() {
-  if (!state.connected || state.capturing) return;
-  state.configured = false;
-  state.phase = "connected";
-  showMessage("Hay cambios pendientes. Aplica la configuracion antes de iniciar.");
-  render();
-}
-
-function setReadingsWaiting(enabled) {
-  elements.values.hc.textContent = enabled.hc ? "Esperando muestra" : "Desactivado";
-  elements.values.pir.textContent = enabled.pir ? "Esperando muestra" : "Desactivado";
-  elements.values.radar.textContent = enabled.radar ? "Esperando muestra" : "Desactivado";
-  elements.values.lux.textContent = enabled.lux ? "Esperando muestra" : "Desactivado";
-  elements.values.sound.textContent = enabled.sound ? "Esperando muestra" : "Desactivado";
-}
-
-function updateReadings(sample) {
-  elements.values.hc.textContent = sample.distanceCm === null ? "Desactivado" : `${sample.distanceCm.toFixed(2)} cm`;
-  elements.values.pir.textContent = sample.pir === null ? "Desactivado" : sample.pir ? "Detectado" : "No detectado";
-  elements.values.radar.textContent = sample.radar === null ? "Desactivado" : sample.radar ? "Detectado" : "No detectado";
-  elements.values.lux.textContent = sample.lux === null ? "Desactivado" : `${sample.lux.toFixed(2)} lux`;
-  elements.values.sound.textContent = sample.sound === null ? "Desactivado" : sample.sound ? "Evento detectado" : "Sin evento";
-}
-
-function handleSerialLine(line) {
-  if (line.startsWith("@")) {
-    if (line.startsWith("@OK,ENABLE,")) {
-      const [, , sensor, value] = line.split(",");
-      if (SENSOR_KEYS[sensor] && (value === "0" || value === "1")) {
-        state.appliedEnabled[SENSOR_KEYS[sensor]] = value === "1";
-      }
-    }
-    if (line.startsWith("@ERR") && !state.commandBusy) showMessage(`Arduino: ${friendlyError(new Error(line))}`, "error");
-    return;
-  }
-  if (!state.capturing) return;
-
-  try {
-    const sample = parseSampleLine(line, state.appliedEnabled);
-    state.rows.push(sample);
-    charts.setRows(state.rows);
-    updateReadings(sample);
-    render();
-  } catch (error) {
-    showMessage(`Linea Serial ignorada: ${error.message}`, "error");
-  }
-}
-
-async function runCommand(action) {
-  state.commandBusy = true;
-  render();
-  try {
-    return await action();
-  } finally {
-    state.commandBusy = false;
-    render();
-  }
-}
-
-elements.connect.addEventListener("click", async () => {
-  try {
-    showMessage("Selecciona el puerto del Arduino. La placa puede reiniciarse al conectar.");
-    await runCommand(() => serial.connect());
-    state.connected = true;
-    state.configured = false;
-    state.phase = "connected";
-    showMessage("Arduino conectado. Revisa los pines y aplica la configuracion.", "success");
-  } catch (error) {
-    if (error.name !== "NotFoundError") showMessage(`No fue posible abrir el puerto: ${friendlyError(error)}`, "error");
-  }
-  render();
-});
-
-elements.apply.addEventListener("click", async () => {
-  const config = getConfig();
-  const errors = validateConfig(config);
-  if (errors.length) {
-    showMessage(errors.join(" "), "error");
-    return;
-  }
-
-  try {
-    await runCommand(() => serial.sendCommand(serializeConfig(config)));
-    state.configured = true;
-    state.appliedEnabled = { ...config.enabled };
-    state.phase = "configured";
-    setReadingsWaiting(state.appliedEnabled);
-    showMessage("Configuracion aceptada por Arduino.", "success");
-  } catch (error) {
-    state.configured = false;
-    state.phase = "connected";
-    showMessage(`No se pudo aplicar: ${friendlyError(error)}`, "error");
-  }
-  render();
-});
-
-elements.start.addEventListener("click", async () => {
-  if (!state.configured) {
-    showMessage("Primero aplica una configuracion valida.", "error");
-    return;
-  }
-  try {
-    await runCommand(() => serial.sendCommand("START"));
-    state.rows = [];
-    charts.setRows(state.rows, { resetSelection: true });
-    state.capturing = true;
-    state.phase = "capturing";
-    state.captureStartedAt = performance.now();
-    state.stoppedElapsedMs = 0;
-    setReadingsWaiting(state.appliedEnabled);
-    showMessage("Captura iniciada: una muestra conjunta por segundo.", "success");
-  } catch (error) {
-    showMessage(`No se pudo iniciar: ${friendlyError(error)}`, "error");
-  }
-  render();
-});
-
-elements.stop.addEventListener("click", async () => {
-  try {
-    await runCommand(() => serial.sendCommand("STOP"));
-    stopCaptureState();
-    showMessage("Captura detenida. Puedes descargar el CSV o cambiar la configuracion.", "success");
-  } catch (error) {
-    showMessage(`No se pudo detener: ${friendlyError(error)}`, "error");
-  }
-  render();
-});
-
-function stopCaptureState() {
-  if (state.capturing) state.stoppedElapsedMs = performance.now() - state.captureStartedAt;
-  state.capturing = false;
-  state.phase = state.connected ? "stopped" : "disconnected";
-}
-
-function setDisconnected(message) {
-  stopCaptureState();
-  state.connected = false;
-  state.configured = false;
-  state.phase = "disconnected";
-  showMessage(message, "error");
-  render();
-}
-
-for (const select of elements.pinSelects) select.addEventListener("change", markConfigurationPending);
-
-for (const toggle of elements.toggles) {
-  toggle.addEventListener("change", async () => {
-    if (!state.capturing) {
-      markConfigurationPending();
-      return;
-    }
-
-    const requestedValue = toggle.checked;
-    const sensor = SENSOR_IDS[toggle.id];
-    const config = getConfig();
-    const errors = validateConfig(config);
-    if (errors.length) {
-      toggle.checked = !requestedValue;
-      showMessage(errors.join(" "), "error");
-      return;
-    }
-
-    try {
-      await runCommand(() => serial.sendCommand(`ENABLE,${sensor},${requestedValue ? 1 : 0}`));
-      state.appliedEnabled[SENSOR_KEYS[sensor]] = requestedValue;
-      setReadingsWaiting(state.appliedEnabled);
-      showMessage(`${sensor} ${requestedValue ? "activado" : "desactivado"} durante la captura.`, "success");
-    } catch (error) {
-      toggle.checked = !requestedValue;
-      showMessage(`No se pudo cambiar ${sensor}: ${friendlyError(error)}`, "error");
-    }
-    render();
+for (const origin of ROLES) {
+  boards[origin] = new BoardController(origin, {
+    epoch, transportFactory: handlers => new SerialConnection(handlers),
+    onChange: () => render(), onIncident: recordIncident,
   });
 }
 
-elements.download.addEventListener("click", () => {
-  const blob = new Blob([buildCsv(state.rows)], { type: "text/csv;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
+function rowsForExport() { return ROLES.flatMap(origin => boards[origin].allRows).sort((a, b) => a.timeMs - b.timeMs); }
+const phaseLabels = { disconnected: "Desconectado", connecting: "Identificando…", unconfigured: "Revisar configuración", configured: "Configurado · detenido", starting: "Iniciando…", capturing: "Capturando" };
+const sensorFields = { hc: "distanceCm", lux: "lux", sound: "sound", pir: "pir", radar: "radar" };
+function render(updateCharts = true) {
+  if (!ready) return;
+  for (const origin of ROLES) {
+    const board = boards[origin];
+    const status = document.querySelector(`#${origin}-status`);
+    const stale = board.phase === "capturing" && performance.now() - (board.lastReceived ?? board.currentCapture.startedClock) > 3500;
+    status.textContent = stale ? "Captura · sin datos recientes" : phaseLabels[board.phase];
+    status.dataset.phase = stale ? "stopped" : board.phase;
+    document.querySelector(`#${origin}-connect`).disabled = board.busy || board.connected || !SerialConnection.isSupported();
+    document.querySelector(`#${origin}-disconnect`).disabled = board.busy || !board.connected;
+    document.querySelector(`#${origin}-configure`).disabled = board.busy || !board.connected || board.phase === "capturing";
+    document.querySelector(`#${origin}-start`).disabled = board.busy || !board.connected || !board.configured || board.phase === "capturing";
+    document.querySelector(`#${origin}-stop`).disabled = board.busy || !board.connected || !["capturing", "unconfigured"].includes(board.phase);
+    document.querySelector(`#${origin}-count`).textContent = `${board.rows.length} lecturas`;
+    document.querySelector(`#${origin}-age`).textContent = board.lastReceived === null ? "Sin datos" : `Hace ${Math.floor((performance.now() - board.lastReceived) / 1000)} s`;
+    const captureLabel = document.querySelector(`#${origin}-capture`);
+    captureLabel.hidden = !board.currentCapture;
+    captureLabel.textContent = board.currentCapture ? `Captura ${board.captures.length}` : "";
+  }
+  for (const [key, sensor] of Object.entries(sensors)) {
+    const origin = SENSOR_ORIGIN[key];
+    const board = boards[origin];
+    const draft = drafts[origin];
+    const toggle = document.querySelector(`#${key}-enabled`);
+    toggle.checked = draft.enabled[key];
+    toggle.disabled = board.busy || !board.connected;
+    for (const [field] of sensor.pins) {
+      const select = document.querySelector(`#${field}`);
+      select.value = String(draft[field]);
+      select.disabled = board.busy || board.phase === "capturing" || !board.connected;
+    }
+    let value = "Sin conexión";
+    if (board.connected) {
+      if (!board.configured) value = "Configuración pendiente";
+      else if (!board.config.enabled[key]) value = "Desactivado";
+      else if (board.phase !== "capturing") value = "Detenido";
+      else if (board.lastReceived === null) value = performance.now() - board.currentCapture.startedClock > 3500 ? "Sin datos recientes" : "Esperando muestra";
+      else if (performance.now() - board.lastReceived > 3500) value = "Sin datos recientes";
+      else {
+        const reading = board.rows.at(-1)?.[sensorFields[key]];
+        value = reading == null ? "Lectura no disponible" : key === "hc" ? `${reading.toFixed(2)} cm`
+          : key === "lux" ? `${reading.toFixed(2)} lux` : key === "sound" ? `DO = ${reading}` : reading ? "Movimiento (1)" : "Sin detección (0)";
+      }
+    }
+    document.querySelector(`#${key}-value`).textContent = value;
+  }
+  const count = ROLES.reduce((sum, origin) => sum + boards[origin].allRows.length, 0);
+  const captureCount = ROLES.reduce((sum, origin) => sum + boards[origin].captures.length, 0);
+  document.querySelector("#archive-count").textContent = `${count} lecturas · ${captureCount} capturas · ${incidents.length} eventos`;
+  document.querySelector("#download-data").disabled = count === 0;
+  document.querySelector("#download-incidents").disabled = incidents.length === 0;
+  if (updateCharts) charts.setRows(ROLES.flatMap(origin => boards[origin].rows).sort((a, b) => a.timeMs - b.timeMs));
+}
+
+async function execute(origin, operation) {
+  try { await operation(); showMessage(""); }
+  catch (error) { if (error.name !== "NotFoundError") showMessage(`${origin}: ${error.message}`, "error"); }
+  render();
+}
+for (const origin of ROLES) {
+  const board = boards[origin];
+  for (const action of ["connect", "disconnect", "start", "stop"]) {
+    document.querySelector(`#${origin}-${action}`).addEventListener("click", () => execute(origin, () => board[action]()));
+  }
+  document.querySelector(`#${origin}-configure`).addEventListener("click", () => {
+    const errors = validateConfig(drafts[origin]);
+    if (errors.length) { showMessage(`${origin}: ${errors.join(" ")}`, "error"); return; }
+    void execute(origin, () => board.configure(drafts[origin]));
+  });
+}
+function markPending(origin) {
+  const board = boards[origin];
+  if (board.connected) { board.configured = false; board.phase = "unconfigured"; }
+  showMessage(`${origin}: aplica la configuración.`);
+  render();
+}
+for (const [key, sensor] of Object.entries(sensors)) {
+  const origin = SENSOR_ORIGIN[key];
+  for (const [field] of sensor.pins) document.querySelector(`#${field}`).addEventListener("change", event => {
+    drafts[origin][field] = Number(event.target.value); markPending(origin);
+  });
+  document.querySelector(`#${key}-enabled`).addEventListener("change", async event => {
+    const enabled = event.target.checked;
+    drafts[origin].enabled[key] = enabled;
+    if (boards[origin].phase === "capturing") {
+      await execute(origin, () => boards[origin].enable(key, enabled));
+      drafts[origin] = structuredClone(boards[origin].config);
+      render();
+    } else markPending(origin);
+  });
+}
+function download(contents, name) {
+  const url = URL.createObjectURL(new Blob(["\uFEFF", contents], { type: "text/csv;charset=utf-8" }));
   const link = document.createElement("a");
-  const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-  link.href = url;
-  link.download = `muestras-arduino-${timestamp}.csv`;
-  link.click();
-  URL.revokeObjectURL(url);
+  link.href = url; link.download = `${name}-${new Date().toISOString().replace(/[:.]/g, "-")}.csv`;
+  document.body.append(link); link.click(); link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+document.querySelector("#download-data").addEventListener("click", () => {
+  const rows = rowsForExport(); download(buildCsv(rows), "mediciones-uno-nano"); downloadedRows = rows.length;
 });
-
-function renderElapsed() {
-  const elapsedMs = state.capturing ? performance.now() - state.captureStartedAt : state.stoppedElapsedMs;
-  const totalSeconds = Math.floor(elapsedMs / 1000);
-  const minutes = String(Math.floor(totalSeconds / 60)).padStart(2, "0");
-  const seconds = String(totalSeconds % 60).padStart(2, "0");
-  elements.elapsed.textContent = `${minutes}:${seconds}`;
-}
-
-setInterval(renderElapsed, 250);
-
-if (!SerialConnection.isSupported()) {
-  showMessage("Web Serial no esta disponible. Usa Google Chrome de escritorio o un navegador Chromium compatible.", "error");
-}
+document.querySelector("#download-incidents").addEventListener("click", () => download(buildIncidentCsv(incidents), "incidencias-uno-nano"));
+window.addEventListener("beforeunload", event => {
+  if (rowsForExport().length > downloadedRows) { event.preventDefault(); event.returnValue = ""; }
+});
+ready = true;
 render();
+setInterval(() => render(false), 500);
+if (!SerialConnection.isSupported()) showMessage("Web Serial no disponible. Abre la página en Chrome de escritorio mediante localhost o HTTPS.", "error");
