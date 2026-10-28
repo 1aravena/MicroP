@@ -3,12 +3,16 @@ import { RemotePanel, readingFor } from "./remote-panel.js";
 import { ROLES, SENSOR_ORIGIN } from "./protocol.js";
 import { SensorCharts } from "./charts.js";
 import { sensors, mountSensorUI, setupTheme } from "./sensor-ui.js";
+import { Experiments } from "./experiments.js";
+import { ExperimentsView } from "./experiments-view.js";
 
 mountSensorUI({ remote: true });
 const api = new ApiClient();
 const charts = new SensorCharts({ timeMode: "received" });
 setupTheme(() => charts.redraw());
 const panel = new RemotePanel(api, { onChange: render });
+const experiments = new Experiments(api, { onChange: state => experimentsView.render(state) });
+const experimentsView = new ExperimentsView(experiments, api, { onChange: () => render(panel) });
 const $ = selector => document.querySelector(selector);
 const phaseLabels = { disconnected: "Desconectado", connecting: "Identificando…", unconfigured: "Revisar configuración",
   configured: "Configurado · detenido", starting: "Iniciando…", capturing: "Capturando", storage_error: "Error de almacenamiento" };
@@ -63,10 +67,11 @@ function render(state) {
   for (const origin of ROLES) {
     const board = state.boards[origin];
     const snapshot = board.snapshot;
-    const ready = state.online && state.storageOK && !board.pending && !board.verifying && !snapshot.busy;
+    const reserved = Boolean(snapshot.trialId || experiments.reserved);
+    const ready = state.online && state.storageOK && !board.pending && !board.verifying && !snapshot.busy && !reserved && !experiments.busy;
     const capturing = ["capturing", "starting"].includes(snapshot.phase);
     const status = $(`#${origin}-status`);
-    status.textContent = !state.online ? "Sin comunicación" : board.pending ? operationLabels[board.pending] ?? "Actualizando sensor…"
+    status.textContent = !state.online ? "Sin comunicación" : reserved ? "Reservado por ensayo · detener desde Ensayos" : board.pending ? operationLabels[board.pending] ?? "Actualizando sensor…"
       : board.verifying ? "Verificando estado…" : snapshot.busy ? "Operación en curso…" : snapshot.stale ? "Captura · sin datos recientes"
         : board.dirty ? "Cambios por aplicar" : phaseLabels[snapshot.phase] ?? "Estado desconocido";
     status.dataset.phase = !state.online || snapshot.stale ? "stopped" : snapshot.phase;
@@ -193,9 +198,26 @@ $("#download-incidents").addEventListener("click", () => {
   link.href = api.incidentExportUrl(); link.download = "incidencias.csv";
   document.body.append(link); link.click(); link.remove();
 });
-window.addEventListener("pagehide", () => panel.stop());
+window.addEventListener("pagehide", () => { panel.stop(); experiments.stop(); });
 // Volver desde la caché de navegación carga una vista nueva, nunca otra captura.
 window.addEventListener("pageshow", event => { if (event.persisted) location.reload(); });
-document.addEventListener("visibilitychange", () => { if (!document.hidden) void panel.refresh(true); });
+document.addEventListener("visibilitychange", () => { if (!document.hidden) { void panel.refresh(true); void experiments.refresh(); } });
+function showSection(section) {
+  const sensors = section !== "ensayos";
+  $("#sensor-section").hidden = !sensors;
+  $("#experiment-section").hidden = sensors;
+  $("#show-sensors").setAttribute("aria-pressed", String(sensors));
+  $("#show-experiments").setAttribute("aria-pressed", String(!sensors));
+  $("#show-sensors").classList.toggle("secondary", !sensors);
+  $("#show-experiments").classList.toggle("secondary", sensors);
+  if (sensors) charts.redraw();
+}
+for (const [id, hash] of [["show-sensors", "sensores"], ["show-experiments", "ensayos"]]) {
+  $(`#${id}`).addEventListener("click", () => { location.hash = hash; showSection(hash); });
+}
+window.addEventListener("hashchange", () => showSection(location.hash.slice(1)));
+showSection(location.hash.slice(1));
+experimentsView.render(experiments);
 render(panel);
 void panel.start();
+void experiments.start();

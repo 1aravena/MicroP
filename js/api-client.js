@@ -9,8 +9,8 @@ export class ApiError extends Error {
 
 const statusMessages = {
   404: "El registro solicitado no existe.",
-  409: "La operación no es compatible con el estado actual de la placa.",
-  422: "Revisa el puerto y la configuración enviados.",
+  409: "La operación no es compatible con el estado actual del sistema.",
+  422: "Revisa los datos enviados.",
   503: "El transporte o el almacenamiento no están disponibles.",
   504: "La placa no confirmó la operación. Comprueba su estado antes de repetirla.",
 };
@@ -22,7 +22,12 @@ export class ApiClient {
   }
 
   url(path, query = {}) {
-    const params = new URLSearchParams(Object.entries(query).filter(([, value]) => value !== undefined && value !== null && value !== ""));
+    const params = new URLSearchParams();
+    for (const [key, value] of Object.entries(query)) {
+      for (const item of Array.isArray(value) ? value : [value]) {
+        if (item !== undefined && item !== null && item !== "") params.append(key, item);
+      }
+    }
     return `${this.base}${path}${params.size ? `?${params}` : ""}`;
   }
 
@@ -59,6 +64,18 @@ export class ApiClient {
   captures(query) { return this.request("/captures", { query }); }
   samples(query) { return this.request("/samples", { query }); }
   incidents(query) { return this.request("/incidents", { query }); }
+  scenarios() { return this.request("/scenarios"); }
+  sessions(query) { return this.request("/sessions", { query }); }
+  session(id) { return this.request(`/sessions/${encodeURIComponent(id)}`); }
+  createSession(body) { return this.request("/sessions", { method: "POST", body }); }
+  closeSession(id) { return this.request(`/sessions/${encodeURIComponent(id)}/close`, { method: "POST" }); }
+  trials(query) { return this.request("/trials", { query }); }
+  trial(id) { return this.request(`/trials/${encodeURIComponent(id)}`); }
+  activeTrial() { return this.request("/trials/active"); }
+  createTrial(id, body) { return this.request(`/sessions/${encodeURIComponent(id)}/trials`, { method: "POST", body }); }
+  trialAction(id, action, body) { return this.request(`/trials/${encodeURIComponent(id)}/${action}`, { method: "POST", body }); }
+  datasetSummary() { return this.request("/dataset/summary"); }
+  datasetExportUrl(ids) { return this.url("/dataset/export.zip", { session_id: ids }); }
 
   control(origin, action, body) {
     return this.request(`/boards/${encodeURIComponent(origin)}/${action}`, {

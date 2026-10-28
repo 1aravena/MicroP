@@ -80,3 +80,20 @@ La interfaz remota ya tiene pruebas de software. Completar estos ensayos con dat
 | Descargar captura de mas de 300 lecturas | CSV completo, aunque el grafico sea una ventana | Pendiente |
 
 Ver el [procedimiento del panel](panel-web.md). Registrar fecha, integrante, versiones, memoria y CSV de cada ensayo.
+
+## Recoleccion de ensayos y dataset real — pendiente
+
+Seguir la [guia de ensayos](ensayos-dataset.md). Los resultados simulados de software no completan estos puntos.
+
+- [ ] Registrar modelos, cableado, polaridad DO, configuracion y versiones reales.
+- [ ] Medir posiciones proximas/lejanas y registrar iluminacion y disposicion.
+- [ ] Medir estabilizacion/retencion PIR y radar; realizar piloto de los cuatro escenarios.
+- [ ] Registrar ajustes del procedimiento antes de la recoleccion definitiva.
+- [ ] Sesion entrenamiento A: cuatro escenarios, buscar 25 ventanas utilizables por escenario.
+- [ ] Sesion entrenamiento B: cuatro escenarios, buscar otras 25 ventanas por escenario.
+- [ ] Sesion posterior de prueba independiente: cuatro escenarios, 25 ventanas por escenario.
+- [ ] Confirmar humanamente cada ensayo, revisar exclusiones y repetir dentro del mismo conjunto cuando falten observaciones.
+- [ ] Comprobar recarga durante ensayo, detencion coordinada y fallas; conservar fuentes excluidas.
+- [ ] Verificar al menos 100 ventanas reales de prueba adicionales al entrenamiento; revisar balance 200/100.
+- [ ] Cerrar sesiones, exportar ZIP y verificar hashes y ausencia de sesiones compartidas entre conjuntos.
+- [ ] Adjuntar manifiesto, CSV, resultados, condiciones, limitaciones y evidencias reales.

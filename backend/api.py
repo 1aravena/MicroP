@@ -11,6 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from .config import Settings
 from .errors import BackendError, DeviceUnavailable
 from .service import AcquisitionService
+from .dataset import export_dataset
 
 Origin = Literal["UNO", "NANO"]
 Sensor = Literal["hc", "pir", "radar", "lux", "sound"]
@@ -48,6 +49,25 @@ class ConnectionRequest(StrictModel):
 
 class EnableRequest(StrictModel):
     enabled: bool
+
+
+class SessionRequest(StrictModel):
+    name: str = Field(min_length=1, max_length=120)
+    responsible: str = Field(min_length=1, max_length=120)
+    partition: Literal['train', 'test']
+    source: Literal['real', 'simulated']
+    conditions: str = Field(min_length=1, max_length=2000)
+    notes: str = Field(default='', max_length=2000)
+
+
+class TrialRequest(StrictModel):
+    scenario: str = Field(min_length=1, max_length=64)
+    notes: str = Field(default='', max_length=2000)
+
+
+class ReviewRequest(StrictModel):
+    confirmed: bool
+    notes: str = Field(default='', max_length=2000)
 
 
 def get_service(request: Request):
@@ -111,27 +131,96 @@ def create_app(settings=None, factory=None):
 
     @app.post(prefix + "/boards/{origin}/connect")
     def connect(origin: Origin, body: ConnectionRequest, service: Service):
-        return service.board(origin).submit("connect", body.model_dump())
+        return service.control(origin, "connect", body.model_dump())
 
     @app.post(prefix + "/boards/{origin}/disconnect")
     def disconnect(origin: Origin, service: Service):
-        return service.board(origin).submit("disconnect")
+        return service.control(origin, "disconnect")
 
     @app.put(prefix + "/boards/{origin}/config")
     def configure(origin: Origin, body: BoardConfig, service: Service):
-        return service.board(origin).submit("config", body.model_dump())
+        return service.control(origin, "config", body.model_dump())
 
     @app.post(prefix + "/boards/{origin}/start")
     def start(origin: Origin, service: Service):
-        return service.board(origin).submit("start")
+        return service.control(origin, "start")
 
     @app.post(prefix + "/boards/{origin}/stop")
     def stop(origin: Origin, service: Service):
-        return service.board(origin).submit("stop")
+        return service.control(origin, "stop")
 
     @app.put(prefix + "/boards/{origin}/sensors/{sensor}")
     def enable(origin: Origin, sensor: Sensor, body: EnableRequest, service: Service):
-        return service.board(origin).submit("enable", {"sensor": sensor, "enabled": body.enabled})
+        return service.control(origin, "enable", {"sensor": sensor, "enabled": body.enabled})
+
+    @app.get(prefix + '/scenarios')
+    def scenarios(service: Service):
+        return service.experiments.catalog()
+
+    @app.get(prefix + '/sessions')
+    def sessions(service: Service, after_id: Cursor = 0, limit: Limit = 20):
+        return service.experiments.repository.sessions(after_id, limit)
+
+    @app.post(prefix + '/sessions', status_code=201)
+    def create_session(body: SessionRequest, service: Service):
+        return service.experiments.create_session(body.model_dump())
+
+    @app.get(prefix + '/sessions/{session_id}')
+    def session(session_id: UUID, service: Service):
+        return service.experiments.repository.session(str(session_id))
+
+    @app.post(prefix + '/sessions/{session_id}/close')
+    def close_session(session_id: UUID, service: Service):
+        return service.experiments.close_session(str(session_id))
+
+    @app.post(prefix + '/sessions/{session_id}/trials', status_code=201)
+    def create_trial(session_id: UUID, body: TrialRequest, service: Service):
+        return service.experiments.create_trial(str(session_id), body.scenario, body.notes)
+
+    @app.get(prefix + '/trials')
+    def trials(service: Service, session_id: UUID | None = None, after_id: Cursor = 0, limit: Limit = 20):
+        if session_id:
+            service.experiments.repository.session(str(session_id))
+        return service.experiments.repository.trials(str(session_id) if session_id else None, after_id, limit)
+
+    @app.get(prefix + '/trials/active')
+    def active_trial(service: Service):
+        return {'trial': service.experiments.active()}
+
+    @app.get(prefix + '/trials/{trial_id}')
+    def trial(trial_id: UUID, service: Service):
+        return service.experiments.repository.trial(str(trial_id))
+
+    @app.post(prefix + '/trials/{trial_id}/start')
+    def start_trial(trial_id: UUID, service: Service):
+        return service.experiments.start(str(trial_id))
+
+    @app.post(prefix + '/trials/{trial_id}/stop')
+    def stop_trial(trial_id: UUID, service: Service):
+        return service.experiments.stop(str(trial_id))
+
+    @app.post(prefix + '/trials/{trial_id}/review', status_code=202)
+    def review_trial(trial_id: UUID, body: ReviewRequest, service: Service):
+        return service.experiments.review(str(trial_id), body.confirmed, body.notes)
+
+    @app.get(prefix + '/dataset/summary')
+    def dataset_summary(service: Service):
+        return service.experiments.repository.summary()
+
+    @app.get(prefix + '/dataset/export.zip')
+    def dataset_export(service: Service, session_id: Annotated[list[UUID], Query(min_length=1, max_length=100)]):
+        temporary = export_dataset(service.store, service.experiments.repository, [str(item) for item in session_id])
+
+        def chunks():
+            try:
+                while data := temporary.read(65536):
+                    yield data
+            finally:
+                temporary.close()
+
+        from starlette.background import BackgroundTask
+        return StreamingResponse(chunks(), media_type='application/zip', background=BackgroundTask(temporary.close),
+                                 headers={'Content-Disposition': 'attachment; filename="dataset-grupo-c.zip"'})
 
     @app.get(prefix + "/captures")
     def captures(service: Service, origin: Origin | None = None, after_id: Cursor = 0,
