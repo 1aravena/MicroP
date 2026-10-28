@@ -14,6 +14,8 @@ const panel = new RemotePanel(api, { onChange: render });
 const experiments = new Experiments(api, { onChange: state => experimentsView.render(state) });
 const experimentsView = new ExperimentsView(experiments, api, { onChange: () => render(panel) });
 const $ = selector => document.querySelector(selector);
+// Pages solo publica archivos. data-hosting permite identificar otros hosts estaticos.
+const staticHosting = location.hostname.endsWith(".github.io") || document.documentElement.dataset.hosting === "static";
 const phaseLabels = { disconnected: "Desconectado", connecting: "Identificando…", unconfigured: "Revisar configuración",
   configured: "Configurado · detenido", starting: "Iniciando…", capturing: "Capturando", storage_error: "Error de almacenamiento" };
 const operationLabels = { connect: "Identificando…", disconnect: "Desconectando…", config: "Aplicando configuración…", start: "Iniciando…", stop: "Deteniendo…" };
@@ -59,8 +61,8 @@ function renderPorts(state) {
 }
 
 function render(state) {
-  $("#service-status").textContent = state.online ? "Disponible" : state.errors.connection ? "Sin comunicación" : "Conectando…";
-  $("#storage-status").textContent = !state.online ? "Sin verificar" : !state.health ? "Comprobando…" : state.storageOK ? "Disponible" : "Error";
+  $("#service-status").textContent = staticHosting ? "Requiere backend" : state.online ? "Disponible" : state.errors.connection ? "Sin comunicación" : "Conectando…";
+  $("#storage-status").textContent = staticHosting ? "Sin consultar" : !state.online ? "Sin verificar" : !state.health ? "Comprobando…" : state.storageOK ? "Disponible" : "Error";
   $("#refresh-ports").disabled = !state.online || state.portsBusy;
   inlineError("#service-error", [...new Set([state.errors.connection, state.errors.health, state.errors.ports].filter(Boolean))].join(" "));
   renderPorts(state);
@@ -110,6 +112,7 @@ function render(state) {
 
 function renderCaptures(state) {
   inlineError("#capture-error", state.errors.captures);
+  $("#capture-origin").disabled = !state.online || state.captureBusy;
   $("#captures-previous").disabled = !state.online || state.captureBusy || state.capturePage === 0;
   $("#captures-next").disabled = !state.online || state.captureBusy || !state.captureHasMore;
   $("#capture-page").textContent = `Página ${state.capturePage + 1}${state.captureBusy ? " · Actualizando…" : ""}`;
@@ -201,7 +204,7 @@ $("#download-incidents").addEventListener("click", () => {
 window.addEventListener("pagehide", () => { panel.stop(); experiments.stop(); });
 // Volver desde la caché de navegación carga una vista nueva, nunca otra captura.
 window.addEventListener("pageshow", event => { if (event.persisted) location.reload(); });
-document.addEventListener("visibilitychange", () => { if (!document.hidden) { void panel.refresh(true); void experiments.refresh(); } });
+document.addEventListener("visibilitychange", () => { if (!document.hidden && !staticHosting) { void panel.refresh(true); void experiments.refresh(); } });
 function showSection(section) {
   const sensors = section !== "ensayos";
   $("#sensor-section").hidden = !sensors;
@@ -219,5 +222,10 @@ window.addEventListener("hashchange", () => showSection(location.hash.slice(1)))
 showSection(location.hash.slice(1));
 experimentsView.render(experiments);
 render(panel);
-void panel.start();
-void experiments.start();
+if (staticHosting) {
+  $("#static-hosting-notice").hidden = false;
+  for (const id of ["dataset-train", "dataset-test", "dataset-minimum"]) $(`#${id}`).textContent = "Sin consultar";
+} else {
+  void panel.start();
+  void experiments.start();
+}

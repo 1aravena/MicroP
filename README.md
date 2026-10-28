@@ -18,6 +18,8 @@ Incluye seleccion de puertos, controles independientes, configuracion, lecturas 
 
 Ver la [guia del panel, contrato de consultas y validacion](docs/panel-web.md). `index.html` conserva el diagnostico USB directo mediante localhost del PC o HTTPS, con su funcionamiento anterior. Las pruebas de software y las pruebas fisicas mantienen estados separados.
 
+La portada de GitHub Pages incluye **Abrir panel de ensayos**, hacia `panel.html#ensayos`. Pages permite ver la interfaz; para operar placas y sesiones hay que abrir el panel servido por Python en el PC o Raspberry. La version estatica muestra ese aviso y no intenta consultar una API inexistente en GitHub.
+
 ## Ensayos y dataset
 
 La seccion **Ensayos y dataset** permite crear sesiones de entrenamiento o prueba, coordinar ambas placas, confirmar humanamente uno de cuatro escenarios y obtener ventanas de diez segundos con diez caracteristicas y validacion de calidad. Las sesiones cerradas se exportan con CSV, fuentes, exclusiones, diccionario, configuraciones, versiones y hashes. Las metas son 200 observaciones reales de entrenamiento y 100 de prueba; los datos simulados no cuentan.
