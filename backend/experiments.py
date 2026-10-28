@@ -42,7 +42,7 @@ class Experiments:
 
     @contextmanager
     def individual(self):
-        if not self.lock.acquire(blocking=False):
+        if not self.lock.acquire(timeout=0.1):
             raise BackendError('Hay una operacion de ensayo en curso. Consulta su estado antes de controlar una placa.')
         try:
             if self.closing:
@@ -227,6 +227,9 @@ class Experiments:
         while not self.stopping.wait(0.1):
             trial_id = None
             try:
+                # Consultar una cola vacia no debe reservar los controles de las placas.
+                if self.repository.pending() is None:
+                    continue
                 with self.lock:
                     trial_id = self.repository.pending()
                     if trial_id:
