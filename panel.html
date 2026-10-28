@@ -14,6 +14,14 @@
         <div><p class="eyebrow">GRUPO C · SOLEMNE 2</p><h1>Panel de sensores</h1></div>
         <label class="theme-switch"><input id="theme-switch" type="checkbox" /><span class="switch-track"><span class="switch-thumb"></span></span>Blanco y negro</label>
       </header>
+      <section id="static-hosting-notice" class="control-panel" aria-labelledby="static-hosting-title" hidden>
+        <h2 id="static-hosting-title">Abre el backend para utilizar el panel</h2>
+        <p>Esta página está alojada como un sitio estático. Puedes recorrer la interfaz, pero las placas, las sesiones y los datos se consultan desde el programa Python del PC o de la Raspberry.</p>
+        <p>Si Python está funcionando en este PC, utiliza este acceso:</p>
+        <a class="download-link" href="http://127.0.0.1:8001/#ensayos">Abrir panel conectado en este PC</a>
+        <p>Para una Raspberry en tu red, abre su dirección: <code>http://IP_DE_LA_RASPBERRY:8001/</code>.</p>
+        <p class="hint">Inicia Python desde MicroP. En Windows: <code>.\.venv\Scripts\python.exe -m backend</code>. En Raspberry: <code>.venv/bin/python -m backend --host 0.0.0.0</code>.</p>
+      </section>
       <section class="control-panel service-panel" aria-label="Estado de la Raspberry">
         <div class="service-summary"><div><span>Raspberry</span><strong id="service-status" role="status">Conectando…</strong></div><div><span>Almacenamiento</span><strong id="storage-status">Comprobando…</strong></div></div>
         <button id="refresh-ports" class="secondary" type="button" disabled>Actualizar puertos</button>

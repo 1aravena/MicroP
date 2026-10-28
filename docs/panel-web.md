@@ -24,6 +24,14 @@ Desde el PC de la misma red, abrir `http://IP_DE_LA_RASPBERRY:8001/`, reemplazan
 
 El servicio utiliza la red local de confianza y no incluye login ni roles de usuarios. No publicarlo en internet. La autorización del acceso físico y el ML pertenecen a etapas posteriores.
 
+## Acceso desde GitHub Pages
+
+La portada de Pages abre `index.html`, el diagnóstico USB. Su tarjeta **Panel web · Ensayos y dataset** enlaza a `panel.html#ensayos`. El panel también se publica directamente en `https://1aravena.github.io/MicroP/panel.html#ensayos`.
+
+Pages sirve archivos estáticos y no ejecuta el backend Python ni SQLite. En ese alojamiento se muestra un aviso y se desactivan los controles y las consultas periódicas; los contadores indican **Sin consultar**. El acceso **Abrir panel conectado en este PC** abre `http://127.0.0.1:8001/#ensayos` si Python está funcionando allí. Para usar Raspberry, abrir su IP con el puerto 8001 en la misma red. La página del backend consulta su propia API; no se envían peticiones desde Pages a una API externa ni se cambia CORS.
+
+Para otros alojamientos estáticos puede identificarse el documento con `<html lang="es" data-hosting="static">`. Este indicador solo desactiva la conexión; no genera datos de demostración.
+
 ## Conectar y capturar
 
 1. Conectar los Arduino con los firmwares de protocolo 2 al equipo que ejecuta el backend y cerrar otros programas que ocupen sus puertos.
