@@ -468,7 +468,7 @@ select:disabled { background: var(--soft-surface); color: var(--subtle); }
 .panel-navigation, .board-actions, .export-row { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 16px 0; }
 .panel-navigation button[aria-pressed="true"] { outline: 2px solid var(--brand); outline-offset: 3px; }
 .active-trial { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 16px; border: 2px solid var(--brand); }
-.active-trial[hidden], #sensor-section[hidden], #experiment-section[hidden] { display: none; }
+.active-trial[hidden], #sensor-section[hidden], #experiment-section[hidden], #access-section[hidden] { display: none; }
 .active-trial p { margin-bottom: 0; }
 .experiment-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin: 20px 0; }
 .experiment-form label, #trial-review > label { display: grid; gap: 8px; color: var(--muted); font-size: .88rem; font-weight: 650; }

@@ -5,6 +5,8 @@ import { SensorCharts } from "./charts.js";
 import { sensors, mountSensorUI, setupTheme } from "./sensor-ui.js";
 import { Experiments } from "./experiments.js";
 import { ExperimentsView } from "./experiments-view.js";
+import { AccessPanel } from './access.js';
+import { AccessView } from './access-view.js';
 
 mountSensorUI({ remote: true });
 const api = new ApiClient();
@@ -13,6 +15,11 @@ setupTheme(() => charts.redraw());
 const panel = new RemotePanel(api, { onChange: render });
 const experiments = new Experiments(api, { onChange: state => experimentsView.render(state) });
 const experimentsView = new ExperimentsView(experiments, api, { onChange: () => render(panel) });
+const access = new AccessPanel(api, { onChange: state => accessView.render(state) });
+const accessView = new AccessView(access, api, { onChange: () => {
+  experiments.accessReserved = access.status.active;
+  experimentsView.render(experiments);
+} });
 const $ = selector => document.querySelector(selector);
 // Pages solo publica archivos. data-hosting permite identificar otros hosts estaticos.
 const staticHosting = location.hostname.endsWith(".github.io") || document.documentElement.dataset.hosting === "static";
@@ -69,19 +76,20 @@ function render(state) {
   for (const origin of ROLES) {
     const board = state.boards[origin];
     const snapshot = board.snapshot;
-    const reserved = Boolean(snapshot.trialId || experiments.reserved);
-    const ready = state.online && state.storageOK && !board.pending && !board.verifying && !snapshot.busy && !reserved && !experiments.busy;
+    const accessReserved = Boolean(snapshot.accessReserved || access.status.active);
+    const trialReserved = Boolean(snapshot.trialId || experiments.active);
+    const ready = state.online && state.storageOK && !board.pending && !board.verifying && !snapshot.busy && !trialReserved && !experiments.busy && !access.busy;
     const capturing = ["capturing", "starting"].includes(snapshot.phase);
     const status = $(`#${origin}-status`);
-    status.textContent = !state.online ? "Sin comunicación" : reserved ? "Reservado por ensayo · detener desde Ensayos" : board.pending ? operationLabels[board.pending] ?? "Actualizando sensor…"
+    status.textContent = !state.online ? "Sin comunicación" : trialReserved ? "Reservado por ensayo · detener desde Ensayos" : accessReserved ? 'Modo Acceso y ML activo' : board.pending ? operationLabels[board.pending] ?? "Actualizando sensor…"
       : board.verifying ? "Verificando estado…" : snapshot.busy ? "Operación en curso…" : snapshot.stale ? "Captura · sin datos recientes"
         : board.dirty ? "Cambios por aplicar" : phaseLabels[snapshot.phase] ?? "Estado desconocido";
     status.dataset.phase = !state.online || snapshot.stale ? "stopped" : snapshot.phase;
-    $(`#${origin}-port`).disabled = !ready || snapshot.connected;
-    $(`#${origin}-connect`).disabled = !ready || snapshot.connected || !$(`#${origin}-port`).value;
+    $(`#${origin}-port`).disabled = !ready || accessReserved || snapshot.connected;
+    $(`#${origin}-connect`).disabled = !ready || accessReserved || snapshot.connected || !$(`#${origin}-port`).value;
     $(`#${origin}-disconnect`).disabled = !ready || !snapshot.connected;
-    $(`#${origin}-configure`).disabled = !ready || !snapshot.connected || capturing;
-    $(`#${origin}-start`).disabled = !ready || !snapshot.connected || !snapshot.configured || board.dirty || snapshot.phase !== "configured";
+    $(`#${origin}-configure`).disabled = !ready || accessReserved || !snapshot.connected || capturing;
+    $(`#${origin}-start`).disabled = !ready || accessReserved || !snapshot.connected || !snapshot.configured || board.dirty || snapshot.phase !== "configured";
     $(`#${origin}-stop`).disabled = !ready || !snapshot.connected || !["capturing", "unconfigured"].includes(snapshot.phase);
     $(`#${origin}-count`).textContent = `${snapshot.sampleCount} lecturas`;
     $(`#${origin}-age`).textContent = !state.online ? "Sin verificar" : !snapshot.lastReceivedAt ? "Sin datos" : `Hace ${Math.floor((snapshot.ageMs ?? 0) / 1000)} s`;
@@ -92,7 +100,7 @@ function render(state) {
     for (const [key, sensor] of Object.entries(sensors).filter(([key]) => SENSOR_ORIGIN[key] === origin)) {
       const toggle = $(`#${key}-enabled`);
       toggle.checked = board.draft.enabled[key];
-      toggle.disabled = !ready || !snapshot.connected || snapshot.phase === "starting";
+      toggle.disabled = !ready || accessReserved || !snapshot.connected || snapshot.phase === "starting";
       for (const [field] of sensor.pins) {
         $(`#${field}`).value = String(board.draft[field]);
         $(`#${field}`).disabled = !ready || !snapshot.connected || capturing;
@@ -201,26 +209,31 @@ $("#download-incidents").addEventListener("click", () => {
   link.href = api.incidentExportUrl(); link.download = "incidencias.csv";
   document.body.append(link); link.click(); link.remove();
 });
-window.addEventListener("pagehide", () => { panel.stop(); experiments.stop(); });
+window.addEventListener("pagehide", () => { panel.stop(); experiments.stop(); access.stop(); });
 // Volver desde la caché de navegación carga una vista nueva, nunca otra captura.
 window.addEventListener("pageshow", event => { if (event.persisted) location.reload(); });
-document.addEventListener("visibilitychange", () => { if (!document.hidden && !staticHosting) { void panel.refresh(true); void experiments.refresh(); } });
+document.addEventListener("visibilitychange", () => { if (!document.hidden && !staticHosting) { void panel.refresh(true); void experiments.refresh(); void access.refresh(); } });
 function showSection(section) {
-  const sensors = section !== "ensayos";
+  $('#open-connected-panel').href = `http://127.0.0.1:8001/#${['ensayos', 'acceso'].includes(section) ? section : 'sensores'}`;
+  const sensors = !['ensayos', 'acceso'].includes(section);
   $("#sensor-section").hidden = !sensors;
-  $("#experiment-section").hidden = sensors;
+  $("#experiment-section").hidden = section !== 'ensayos';
+  $('#access-section').hidden = section !== 'acceso';
   $("#show-sensors").setAttribute("aria-pressed", String(sensors));
-  $("#show-experiments").setAttribute("aria-pressed", String(!sensors));
+  $("#show-experiments").setAttribute("aria-pressed", String(section === 'ensayos'));
+  $('#show-access').setAttribute('aria-pressed', String(section === 'acceso'));
   $("#show-sensors").classList.toggle("secondary", !sensors);
-  $("#show-experiments").classList.toggle("secondary", sensors);
+  $("#show-experiments").classList.toggle("secondary", section !== 'ensayos');
+  $('#show-access').classList.toggle('secondary', section !== 'acceso');
   if (sensors) charts.redraw();
 }
-for (const [id, hash] of [["show-sensors", "sensores"], ["show-experiments", "ensayos"]]) {
+for (const [id, hash] of [["show-sensors", "sensores"], ["show-experiments", "ensayos"], ['show-access', 'acceso']]) {
   $(`#${id}`).addEventListener("click", () => { location.hash = hash; showSection(hash); });
 }
 window.addEventListener("hashchange", () => showSection(location.hash.slice(1)));
 showSection(location.hash.slice(1));
 experimentsView.render(experiments);
+accessView.render(access);
 render(panel);
 if (staticHosting) {
   $("#static-hosting-notice").hidden = false;
@@ -228,4 +241,5 @@ if (staticHosting) {
 } else {
   void panel.start();
   void experiments.start();
+  void access.start();
 }

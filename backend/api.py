@@ -4,6 +4,7 @@ from typing import Annotated, Literal
 from uuid import UUID
 
 from fastapi import Depends, FastAPI, Query, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field
@@ -12,6 +13,7 @@ from .config import Settings
 from .errors import BackendError, DeviceUnavailable
 from .service import AcquisitionService
 from .dataset import export_dataset
+from .access import AccessFailure
 
 Origin = Literal["UNO", "NANO"]
 Sensor = Literal["hc", "pir", "radar", "lux", "sound"]
@@ -70,6 +72,11 @@ class ReviewRequest(StrictModel):
     notes: str = Field(default='', max_length=2000)
 
 
+class AccessRequest(StrictModel):
+    requestId: str = Field(pattern=r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$')
+    pin: str = Field(pattern=r'^[0-9]{6}$', repr=False, json_schema_extra={'writeOnly': True})
+
+
 def get_service(request: Request):
     return request.app.state.service
 
@@ -107,9 +114,68 @@ def create_app(settings=None, factory=None):
 
     @app.exception_handler(BackendError)
     async def backend_error(_, error):
-        return JSONResponse(status_code=error.status_code, content={"detail": str(error)})
+        body, headers = {'detail': str(error)}, {}
+        if isinstance(error, AccessFailure):
+            body['attempt'] = error.attempt
+            if error.retry_after:
+                headers['Retry-After'] = str(error.retry_after)
+        return JSONResponse(status_code=error.status_code, content=body, headers=headers)
+
+    @app.exception_handler(RequestValidationError)
+    async def validation_error(request, error):
+        # No devolver input, cuerpo ni ctx: pueden contener el PIN.
+        if request.url.path.startswith('/api/v1/access/'):
+            return JSONResponse(status_code=422, content={'detail': 'Solicitud de acceso invalida. Revisa el UUID y el PIN de seis digitos.'})
+        details = [{'loc': item['loc'], 'type': item['type'], 'msg': 'Solicitud invalida; revisa el campo indicado.'}
+                   for item in error.errors()]
+        return JSONResponse(status_code=422, content={'detail': details})
 
     prefix = "/api/v1"
+
+    def check_access_origin(request):
+        origin = request.headers.get('origin')
+        if origin and origin != str(request.base_url).rstrip('/'):
+            raise AccessFailure('El acceso se solicita desde el panel servido por este backend.', 403)
+
+    @app.get(prefix + '/access/status')
+    def access_status(service: Service):
+        return service.access.status()
+
+    @app.post(prefix + '/access/enable')
+    def access_enable(request: Request, service: Service):
+        check_access_origin(request)
+        return service.access.enable()
+
+    @app.post(prefix + '/access/disable')
+    def access_disable(request: Request, service: Service):
+        check_access_origin(request)
+        return service.access.disable()
+
+    @app.post(prefix + '/access/attempts')
+    def access_attempt(body: AccessRequest, request: Request, service: Service):
+        check_access_origin(request)
+        return service.access.attempt(body.requestId, body.pin)
+
+    @app.get(prefix + '/access/attempts')
+    def access_attempts(service: Service, after_id: Cursor = 0, limit: Limit = 20):
+        return service.access.attempts(after_id, limit)
+
+    @app.get(prefix + '/access/attempts/{request_id}')
+    def access_attempt_status(request_id: UUID, service: Service):
+        return service.access.get_attempt(str(request_id))
+
+    @app.get(prefix + '/access/export.csv')
+    def access_export(service: Service):
+        return StreamingResponse(service.access.export(), media_type='text/csv; charset=utf-8',
+                                 headers={'Content-Disposition': 'attachment; filename="accesos.csv"'})
+
+    @app.get(prefix + '/ml/status')
+    def ml_status(service: Service):
+        return service.access.monitoring.status()
+
+    @app.get(prefix + '/ml/predictions')
+    def ml_predictions(service: Service, after_id: Cursor = 0, limit: Limit = 20):
+        return service.access.monitoring.predictions(after_id, limit)
 
     @app.get(prefix + "/health")
     def health(service: Service):

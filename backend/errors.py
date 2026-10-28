@@ -21,3 +21,7 @@ class DeviceUnavailable(BackendError):
 class StorageError(BackendError):
     status_code = 503
 
+
+class CapabilityUnavailable(BackendError):
+    status_code = 503
+

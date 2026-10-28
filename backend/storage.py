@@ -92,7 +92,7 @@ class Store:
                 if existing:
                     raise StorageError("Base existente sin esquema conocido; no se modifico ni borro.")
                 self.connection.executescript("BEGIN IMMEDIATE;\n" + SCHEMA + "\nCOMMIT;")
-            elif version not in (1, SCHEMA_VERSION):
+            elif version not in (1, 2, SCHEMA_VERSION):
                 raise StorageError(f"Esquema SQLite no compatible: {version}. No se borro la base.")
             self.migration_backup = upgrade(self.connection, self.path, backup=not new_database)
             self.connection.execute("PRAGMA journal_mode=DELETE")
@@ -182,6 +182,7 @@ class Store:
                        reviewed=0,reviewed_at=?,analysis_state='pending'
                        WHERE status IN ('starting','running','stopping')""", (utc_now(), utc_now()))
             db.execute("UPDATE trials SET analysis_state='pending' WHERE analysis_state='processing'")
+            db.execute("UPDATE access_attempts SET decision='unconfirmed',signal='unconfirmed',reason='service_restart' WHERE decision='pending'")
 
     def add_sample(self, capture_id, sample, enabled, received_at):
         with self.access(True) as db:

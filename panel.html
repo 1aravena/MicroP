@@ -18,7 +18,7 @@
         <h2 id="static-hosting-title">Abre el backend para utilizar el panel</h2>
         <p>Esta página está alojada como un sitio estático. Puedes recorrer la interfaz, pero las placas, las sesiones y los datos se consultan desde el programa Python del PC o de la Raspberry.</p>
         <p>Si Python está funcionando en este PC, utiliza este acceso:</p>
-        <a class="download-link" href="http://127.0.0.1:8001/#ensayos">Abrir panel conectado en este PC</a>
+        <a id="open-connected-panel" class="download-link" href="http://127.0.0.1:8001/#ensayos">Abrir panel conectado en este PC</a>
         <p>Para una Raspberry en tu red, abre su dirección: <code>http://IP_DE_LA_RASPBERRY:8001/</code>.</p>
         <p class="hint">Inicia Python desde MicroP. En Windows: <code>.\.venv\Scripts\python.exe -m backend</code>. En Raspberry: <code>.venv/bin/python -m backend --host 0.0.0.0</code>.</p>
       </section>
@@ -28,7 +28,8 @@
         <p id="service-error" class="hint" hidden></p>
       </section>
       <div id="message" class="message" role="status" aria-live="polite" hidden></div>
-      <nav class="panel-navigation" aria-label="Secciones del panel"><button id="show-sensors" type="button" aria-pressed="true">Sensores</button><button id="show-experiments" class="secondary" type="button" aria-pressed="false">Ensayos y dataset</button></nav>
+      <nav class="panel-navigation" aria-label="Secciones del panel"><button id="show-sensors" type="button" aria-pressed="true">Sensores</button><button id="show-experiments" class="secondary" type="button" aria-pressed="false">Ensayos y dataset</button><button id="show-access" class="secondary" type="button" aria-pressed="false">Acceso y ML</button></nav>
+      <aside id="active-access-bar" class="control-panel active-trial" aria-label="Modo de acceso activo" hidden><div><strong>Acceso y ML activo</strong><p id="active-access-state" role="status"></p></div><button id="active-access-stop" type="button">Desactivar acceso y ML</button></aside>
       <aside id="active-trial-bar" class="control-panel active-trial" aria-label="Ensayo activo" hidden><div><strong>Ensayo activo</strong><p id="active-trial-status" role="status"></p></div><button id="active-trial-stop" type="button">Detener ensayo activo</button></aside>
       <div id="sensor-section">
       <section id="boards" class="board-grid" aria-label="Control de las placas"></section>
@@ -47,6 +48,7 @@
       </section>
       </div>
       <section id="experiment-section" hidden></section>
+      <section id="access-section" hidden></section>
       <noscript>Activa JavaScript para utilizar el panel.</noscript>
     </main>
     <script type="module" src="js/panel.js"></script>

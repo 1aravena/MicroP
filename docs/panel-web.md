@@ -107,7 +107,7 @@ Ejemplo de recuperación reciente:
 /api/v1/samples?capture_id=UUID_CAPTURA&order=desc&limit=300
 ```
 
-La etapa original del panel no requirió migración. La gestión de [ensayos y dataset](ensayos-dataset.md) utiliza ahora esquema 2, con respaldo previo; conserva las cabeceras CSV originales y el protocolo serial.
+La etapa original del panel no requirio migracion. Ensayos introdujo el esquema 2 y acceso lo extiende al 3, con respaldo previo. Se conservan las cabeceras CSV originales y el protocolo de adquisicion; la senalizacion Nano es una extension opcional.
 
 ## Validación de software
 
@@ -144,4 +144,4 @@ Ese servidor se identifica como **PERIFÉRICOS SIMULADOS**, utiliza una base tem
 - [ ] Reiniciar el backend, verificar el historial y comenzar una captura nueva.
 - [ ] Adjuntar CSV reales y resultados a la [pauta física](validacion-hardware.md).
 
-El panel incluye ahora navegación entre Sensores y Ensayos y dataset, con detención global del ensayo activo y controles individuales bloqueados durante su reserva. Ver la [guía de sesiones, revisión y exportación](ensayos-dataset.md). La validación física permanece pendiente, junto con autorización, actuadores y ML.
+El panel incluye navegacion entre Sensores, Ensayos y dataset, y Acceso y ML. Las reservas y estados pertenecen al backend; el modo de acceso conserva disponible la detencion del operador. Ver [sesiones y dataset](ensayos-dataset.md), [acceso y fallas](acceso-y-fallas.md) y [entrenamiento e inferencia](machine-learning.md). La validacion fisica, recoleccion y modelo real evaluado permanecen pendientes; no se implementan actuadores de apertura.

@@ -8,6 +8,8 @@ export class ApiError extends Error {
 }
 
 const statusMessages = {
+  403: 'La solicitud ha sido rechazada.',
+  429: 'Se alcanzo el limite temporal de intentos.',
   404: "El registro solicitado no existe.",
   409: "La operación no es compatible con el estado actual del sistema.",
   422: "Revisa los datos enviados.",
@@ -76,6 +78,14 @@ export class ApiClient {
   trialAction(id, action, body) { return this.request(`/trials/${encodeURIComponent(id)}/${action}`, { method: "POST", body }); }
   datasetSummary() { return this.request("/dataset/summary"); }
   datasetExportUrl(ids) { return this.url("/dataset/export.zip", { session_id: ids }); }
+  accessStatus() { return this.request('/access/status'); }
+  accessMode(action) { return this.request(`/access/${action}`, { method: 'POST' }); }
+  accessAttempt(id) { return this.request(`/access/attempts/${encodeURIComponent(id)}`); }
+  submitAccess(body) { return this.request('/access/attempts', { method: 'POST', body }); }
+  accessAttempts(query) { return this.request('/access/attempts', { query }); }
+  accessExportUrl() { return this.url('/access/export.csv'); }
+  mlStatus() { return this.request('/ml/status'); }
+  predictions(query) { return this.request('/ml/predictions', { query }); }
 
   control(origin, action, body) {
     return this.request(`/boards/${encodeURIComponent(origin)}/${action}`, {

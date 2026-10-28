@@ -119,5 +119,9 @@ def matches_ack(command, line):
         return len(received) == 4
     if sent[0] == "ENABLE":
         return len(received) == 4 and received[2:] == sent[1:]
+    if sent[0] == 'SIGNAL_CAPS':
+        return received == ['@OK', 'SIGNAL_CAPS', '1']
+    if sent[0] == 'SIGNAL':
+        return len(sent) == 3 and received == ['@OK', *sent]
     return len(received) == 2
 

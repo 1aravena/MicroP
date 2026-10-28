@@ -4,6 +4,7 @@ const statusNames = { prepared: "Preparado", starting: "Iniciando", running: "En
 const sourceName = source => source === "real" ? "Real" : "Simulada";
 const splitName = split => split === "train" ? "Entrenamiento" : "Prueba";
 const reasonNames = { interrupted_trial: "Ensayo interrumpido", scenario_not_confirmed: "Escenario sin confirmar o rechazado",
+  model_unavailable: 'Modelo no disponible', model_error: 'Error al calcular la clasificación',
   sensor_configuration_changed: "Configuración de sensores inconsistente", duplicate_or_out_of_order: "Secuencias duplicadas o desordenadas",
   clock_regression: "Retroceso del reloj de recepción", invalid_timestamp: "Fecha de recepción inválida",
   insufficient_rows_UNO: "Menos de 8 registros válidos de Uno", insufficient_rows_NANO: "Menos de 8 registros válidos de Nano",
@@ -12,6 +13,7 @@ const reasonNames = { interrupted_trial: "Ensayo interrumpido", scenario_not_con
   insufficient_pir: "Menos de 8 lecturas PIR", insufficient_radar: "Menos de 8 lecturas de radar",
   invalid_distance: "Distancia inválida", invalid_lux: "Luz inválida", invalid_sound: "Sonido inválido",
   invalid_pir: "PIR inválido", invalid_radar: "Radar inválido" };
+export const qualityReason = reason => reasonNames[reason] ?? 'Problema de calidad registrado';
 const el = (tag, text, className) => {
   const node = document.createElement(tag);
   if (text !== undefined) node.textContent = text;
