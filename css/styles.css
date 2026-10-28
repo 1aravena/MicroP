@@ -461,6 +461,33 @@ select:disabled { background: var(--soft-surface); color: var(--subtle); }
 .pagination { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-top: 16px; }
 .pagination span { color: var(--muted); font-size: 0.84rem; }
 .capture-panel { margin-top: 24px; }
+.panel-navigation, .board-actions, .export-row { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 16px 0; }
+.panel-navigation button[aria-pressed="true"] { outline: 2px solid var(--brand); outline-offset: 3px; }
+.active-trial { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 16px; border: 2px solid var(--brand); }
+.active-trial[hidden], #sensor-section[hidden], #experiment-section[hidden] { display: none; }
+.active-trial p { margin-bottom: 0; }
+.experiment-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin: 20px 0; }
+.experiment-form label, #trial-review > label { display: grid; gap: 8px; color: var(--muted); font-size: .88rem; font-weight: 650; }
+.experiment-form input, .experiment-form textarea, #trial-review textarea { width: 100%; min-width: 0; border: 1px solid var(--border-strong); border-radius: 8px; padding: 11px; background: var(--surface); color: var(--text); font: inherit; }
+.experiment-form textarea, #trial-review textarea { resize: vertical; }
+.experiment-form :focus-visible, #trial-review :focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.experiment-form .wide-field { grid-column: 1 / -1; }
+.experiment-form button { justify-self: start; }
+.experiment-form input:disabled, .experiment-form textarea:disabled { opacity: .65; }
+.dataset-metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.dataset-metrics p { display: grid; gap: 8px; padding: 18px; border-radius: 10px; background: var(--soft-surface); color: var(--muted); }
+.dataset-metrics strong { color: var(--text); font-size: 1.4rem; }
+.selected-row { background: var(--soft-surface); }
+.export-row { justify-content: space-between; }
+.review-check { display: flex !important; align-items: center; margin: 16px 0; }
+.quality-report { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; font-size: .88rem; line-height: 1.65; padding: 16px; border-radius: 10px; background: var(--soft-surface); }
+.capture-id { overflow-wrap: anywhere; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+@media (max-width: 760px) {
+  .experiment-form, .dataset-metrics { grid-template-columns: 1fr; }
+  .dataset-metrics p { margin: 0; }
+  .active-trial > button { width: 100%; }
+}
 @media (max-width: 440px) {
   .service-panel > button, .capture-filter { width: 100%; }
   .pagination > button { flex: 1 1 100%; }

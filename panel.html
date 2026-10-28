@@ -20,6 +20,9 @@
         <p id="service-error" class="hint" hidden></p>
       </section>
       <div id="message" class="message" role="status" aria-live="polite" hidden></div>
+      <nav class="panel-navigation" aria-label="Secciones del panel"><button id="show-sensors" type="button" aria-pressed="true">Sensores</button><button id="show-experiments" class="secondary" type="button" aria-pressed="false">Ensayos y dataset</button></nav>
+      <aside id="active-trial-bar" class="control-panel active-trial" aria-label="Ensayo activo" hidden><div><strong>Ensayo activo</strong><p id="active-trial-status" role="status"></p></div><button id="active-trial-stop" type="button">Detener ensayo activo</button></aside>
+      <div id="sensor-section">
       <section id="boards" class="board-grid" aria-label="Control de las placas"></section>
       <section class="section-heading"><h2>Sensores</h2><p>Hasta 300 lecturas recientes por placa</p></section>
       <section id="sensors" class="sensor-grid" aria-label="Configuración y lecturas de sensores"></section>
@@ -34,6 +37,8 @@
         <p id="incident-error" class="hint" role="status" hidden></p>
         <ol id="incidents" class="incident-list"><li>Cargando actividad…</li></ol>
       </section>
+      </div>
+      <section id="experiment-section" hidden></section>
       <noscript>Activa JavaScript para utilizar el panel.</noscript>
     </main>
     <script type="module" src="js/panel.js"></script>

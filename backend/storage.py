@@ -12,6 +12,7 @@ import uuid
 
 from .errors import BackendError, NotFound, StorageError
 from .protocol import CSV_HEADER, INCIDENT_HEADER
+from .migrations import SCHEMA_VERSION, upgrade
 
 
 def utc_now():
@@ -85,13 +86,15 @@ class Store:
             self.connection.execute("PRAGMA foreign_keys=ON")
             self.connection.execute("PRAGMA busy_timeout=5000")
             version = self.connection.execute("PRAGMA user_version").fetchone()[0]
+            new_database = version == 0
             if version == 0:
                 existing = self.connection.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'").fetchall()
                 if existing:
                     raise StorageError("Base existente sin esquema conocido; no se modifico ni borro.")
                 self.connection.executescript("BEGIN IMMEDIATE;\n" + SCHEMA + "\nCOMMIT;")
-            elif version != 1:
+            elif version not in (1, SCHEMA_VERSION):
                 raise StorageError(f"Esquema SQLite no compatible: {version}. No se borro la base.")
+            self.migration_backup = upgrade(self.connection, self.path, backup=not new_database)
             self.connection.execute("PRAGMA journal_mode=DELETE")
             self.connection.execute("PRAGMA synchronous=FULL")
             self.recover()
@@ -175,6 +178,10 @@ class Store:
                 db.execute("UPDATE captures SET status='interrupted',ended_at=?,end_reason='service_restart' WHERE capture_id=?",
                            (utc_now(), item["capture_id"]))
                 self._incident(db, item["origin"], "INTERRUPTED", "Captura inconclusa al reiniciar el servicio.", item["capture_id"])
+            db.execute("""UPDATE trials SET status='interrupted',ended_at=?,end_reason='service_restart',
+                       reviewed=0,reviewed_at=?,analysis_state='pending'
+                       WHERE status IN ('starting','running','stopping')""", (utc_now(), utc_now()))
+            db.execute("UPDATE trials SET analysis_state='pending' WHERE analysis_state='processing'")
 
     def add_sample(self, capture_id, sample, enabled, received_at):
         with self.access(True) as db:
@@ -195,9 +202,9 @@ class Store:
             with self.access() as db:
                 for table in ("captures", "samples", "incidents"):
                     db.execute(f"SELECT 1 FROM {table} LIMIT 1").fetchone()
-            return {"ok": self.last_error is None, "schemaVersion": 1, "error": self.last_error}
+            return {"ok": self.last_error is None, "schemaVersion": SCHEMA_VERSION, "error": self.last_error}
         except StorageError as error:
-            return {"ok": False, "schemaVersion": 1, "error": str(error)}
+            return {"ok": False, "schemaVersion": SCHEMA_VERSION, "error": str(error)}
 
     @staticmethod
     def _capture(row):

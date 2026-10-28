@@ -107,4 +107,4 @@ if __name__ == "__main__":
     parser.add_argument("--port", type=int, default=8012)
     args = parser.parse_args()
     with tempfile.TemporaryDirectory(prefix="microp-panel-qa-") as folder:
-        uvicorn.run(fixture_app(str(Path(folder) / "qa.sqlite3")), host="127.0.0.1", port=args.port)
+        uvicorn.run(fixture_app(str(Path(folder) / "qa.sqlite3")), host="127.0.0.1", port=args.port, access_log=False)

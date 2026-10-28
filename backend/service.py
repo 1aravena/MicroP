@@ -370,16 +370,24 @@ class AcquisitionService:
         self.closed = False
         for board in self.boards.values():
             board.thread.start()
+        from .experiments import Experiments
+        self.experiments = Experiments(self)
 
     def board(self, origin):
         check_origin(origin)
         return self.boards[origin]
 
     def snapshots(self):
-        return [board.snapshot() for board in self.boards.values()]
+        owner = getattr(getattr(self, 'experiments', None), 'active_id', None)
+        return [{**board.snapshot(), 'trialId': owner} for board in self.boards.values()]
+
+    def control(self, origin, action, payload=None):
+        with self.experiments.individual():
+            return self.board(origin).submit(action, payload)
 
     def close(self):
         if not self.closed:
+            self.experiments.close()
             for board in self.boards.values():
                 board.close()
             self.store.close()

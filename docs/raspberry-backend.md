@@ -162,9 +162,9 @@ Errores: 422 para solicitudes/configuraciones invalidas o identidad incompatible
 
 ## SQLite y exportacion
 
-Base predeterminada: `data/microp.sqlite3`, esquema 1. Tambien aparece un archivo `.lock`; es normal que permanezca tras cerrar. El bloqueo real lo administra el SO y se libera al terminar el proceso. No borrarlo para intentar ejecutar dos instancias sobre la misma base.
+Base predeterminada: `data/microp.sqlite3`, esquema 2. Las bases anteriores de esquema 1 se migran en una transaccion despues de crear un respaldo `.schema1-<UTC>-<id>.bak`. Versiones antiguas del backend no abren el esquema 2. Ver [migracion y ensayos](ensayos-dataset.md). Tambien aparece un archivo `.lock`; es normal que permanezca tras cerrar. El bloqueo real lo administra el SO y se libera al terminar el proceso. No borrarlo para intentar ejecutar dos instancias sobre la misma base.
 
-Tablas: capturas, mediciones e incidencias. Las filas preservan mensaje original, mascara de sensores vigente, tiempo de Arduino y fecha UTC de recepcion. Solo se incrementa el contador despues de confirmar la transaccion. El historial se consulta por bloques y no se acumula en RAM.
+Tablas originales: capturas, mediciones e incidencias; esquema 2 agrega sesiones, ensayos, asociaciones y observaciones derivadas. Las filas preservan mensaje original, mascara de sensores vigente, tiempo de Arduino y fecha UTC de recepcion. Solo se incrementa el contador despues de confirmar la transaccion. El historial se consulta por bloques y no se acumula en RAM.
 
 Cabecera de mediciones:
 
@@ -185,7 +185,7 @@ Invoke-WebRequest "$api/incidents/export.csv" -OutFile 'incidencias.csv'
 
 ## Fallas y recuperacion
 
-- Desconexion de una placa: cierra su captura como interrumpida, conserva datos y deja la otra funcionando.
+- Desconexion de una placa: fuera de ensayos coordinados, conserva la captura interrumpida y deja la otra funcionando. Durante un ensayo se intenta detener ambas y se excluye el ensayo completo.
 - Reinicio del Arduino: invalida configuracion; requiere aplicarla e iniciar una captura nueva.
 - Timeout de control: no se afirma que el estado fisico sea conocido. Se intenta STOP y se requiere verificar/configurar antes de continuar.
 - Error de lectura: NA y una incidencia, conservando las otras mediciones validas.
