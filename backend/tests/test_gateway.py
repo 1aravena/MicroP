@@ -1,5 +1,6 @@
 """Pasarela simulada exclusiva de pruebas; nunca declara datos reales."""
 from dataclasses import replace
+import threading
 import time
 
 import pytest
@@ -108,6 +109,30 @@ def test_slave_failure_does_not_close_master_and_requires_explicit_reconnect(gat
     assert client.post('/api/v1/gateway/connect', json={'port': 'MASTER_PORT'}).status_code == 200
     assert factory.opens == ['MASTER_PORT']
     assert client.get('/api/v1/boards').json()['items'][1]['configured'] is False
+
+
+def test_idle_dataset_lookup_does_not_reserve_board_controls(gateway, monkeypatch):
+    client, _, _ = gateway
+    response = client.post('/api/v1/gateway/connect', json={'port': 'MASTER_PORT'})
+    assert response.status_code == 200, response.text
+    repository = client.app.state.service.experiments.repository
+    original_pending = repository.pending
+    lookup_started = threading.Event()
+    release_lookup = threading.Event()
+
+    def delayed_idle_lookup():
+        lookup_started.set()
+        if not release_lookup.wait(5):
+            raise TimeoutError('La consulta de prueba no se libero.')
+        return original_pending()
+
+    monkeypatch.setattr(repository, 'pending', delayed_idle_lookup)
+    try:
+        assert lookup_started.wait(3)
+        response = client.put('/api/v1/boards/UNO/config', json=default_config('UNO'))
+        assert response.status_code == 200, response.text
+    finally:
+        release_lookup.set()
 
 
 def test_late_ack_wrong_origin_and_wrong_identifier_never_confirm_new_command(gateway):

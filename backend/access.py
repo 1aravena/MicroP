@@ -78,7 +78,7 @@ class Access:
                 'lastSignal': self.service.board('NANO').snapshot()['lastSignal']}
 
     def enable(self):
-        if not self.lock.acquire(blocking=False):
+        if not self.lock.acquire(timeout=0.1):
             raise BackendError('Hay otra operacion en curso.')
         try:
             if self.active:
@@ -162,7 +162,7 @@ class Access:
         if not valid_pin(pin):
             raise ValidationError('El PIN debe contener seis digitos.')
         request_id = str(uuid.UUID(request_id))
-        if not self.lock.acquire(blocking=False):
+        if not self.lock.acquire(timeout=0.1):
             raise BackendError('Hay otra operacion en curso; consulta el estado antes de enviar otro intento.')
         try:
             with self.store.access() as db:
