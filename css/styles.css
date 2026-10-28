@@ -446,6 +446,7 @@ select:disabled { background: var(--soft-surface); color: var(--subtle); }
 .service-summary > div { display: grid; gap: 5px; }
 .service-summary span { color: var(--subtle); font-size: 0.84rem; }
 .service-panel > .hint { flex-basis: 100%; margin: 0; }
+#backend-location { min-width: 0; overflow-wrap: anywhere; }
 .port-field, .capture-filter { display: grid; gap: 6px; color: var(--muted); font-size: 0.84rem; font-weight: 700; }
 .port-field { margin-top: 18px; }
 .capture-filter { min-width: 180px; }
@@ -496,3 +497,5 @@ select:disabled { background: var(--soft-surface); color: var(--subtle); }
   .service-panel > button, .capture-filter { width: 100%; }
   .pagination > button { flex: 1 1 100%; }
 }
+/* El atributo hidden debe prevalecer sobre grid/flex de los componentes. */
+[hidden] { display: none !important; }

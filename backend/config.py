@@ -16,6 +16,8 @@ class Settings:
     stale_after: float = 3.5
     pin_file: str = "data/access-pin.json"
     model_file: str = "data/model.json"
+    transport: str = "usb"
+    serial_port: str = "/dev/serial0"
 
     @classmethod
     def load(cls, path=None):
@@ -27,6 +29,10 @@ class Settings:
         if not isinstance(data, dict) or set(data) - {field.name for field in fields(cls)}:
             raise ValidationError("Configuracion de servidor invalida o con campos desconocidos.")
         result = cls(**data)
+        if result.transport not in ('usb', 'gateway'):
+            raise ValidationError('transport debe ser usb o gateway.')
+        if not isinstance(result.serial_port, str) or not result.serial_port or len(result.serial_port) > 512:
+            raise ValidationError('serial_port debe indicar el UART del maestro.')
         if not isinstance(result.database, str) or not result.database or not isinstance(result.host, str) or not result.host:
             raise ValidationError("database y host deben ser textos no vacios.")
         if type(result.port) is not int or not 1 <= result.port <= 65535:

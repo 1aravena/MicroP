@@ -24,6 +24,7 @@ unsigned long signalStartedMs = 0;
 byte signalPattern = 0;
 char lastSignalId[37] = "";
 byte lastSignalPattern = 0;
+#include "slave.h"
 
 void clearSignal() {
   signalActive = false;
@@ -49,18 +50,18 @@ bool validSignalId(const char *text) {
 }
 
 void handleSignal(char **tokens, byte count) {
-  if (count != 3 || !validSignalId(tokens[1])) { Serial.println(F("@ERR,SIGNAL,FORMAT")); return; }
+  if (count != 3 || !validSignalId(tokens[1])) { out.println(F("@ERR,SIGNAL,FORMAT")); return; }
   byte pattern = strcmp(tokens[2], "ALLOW") == 0 ? 1 : strcmp(tokens[2], "DENY") == 0 ? 2 : strcmp(tokens[2], "FAULT") == 0 ? 3 : strcmp(tokens[2], "OFF") == 0 ? 0 : 255;
-  if (pattern == 255) { Serial.println(F("@ERR,SIGNAL,FORMAT")); return; }
+  if (pattern == 255) { out.println(F("@ERR,SIGNAL,FORMAT")); return; }
   if (strcmp(lastSignalId, tokens[1]) == 0) {
-    if (lastSignalPattern != pattern) { Serial.println(F("@ERR,SIGNAL,ID_REUSED")); return; }
+    if (lastSignalPattern != pattern) { out.println(F("@ERR,SIGNAL,ID_REUSED")); return; }
   } else {
-    if (pattern != 0 && !capturing) { Serial.println(F("@ERR,STATE,NOT_CAPTURING")); return; }
+    if (pattern != 0 && !capturing) { out.println(F("@ERR,STATE,NOT_CAPTURING")); return; }
     strcpy(lastSignalId, tokens[1]); lastSignalPattern = pattern;
     clearSignal(); signalPattern = pattern;
     if (pattern) { signalActive = true; signalStartedMs = millis(); updateSignal(); }
   }
-  Serial.print(F("@OK,SIGNAL,")); Serial.print(tokens[1]); Serial.print(','); Serial.println(tokens[2]);
+  out.print(F("@OK,SIGNAL,")); out.print(tokens[1]); out.print(','); out.println(tokens[2]);
 }
 
 
@@ -117,41 +118,41 @@ bool parseByteValue(const char *text, byte &value) {
 }
 
 void handleConfig(char **tokens, byte count) {
-  if (capturing) { Serial.println(F("@ERR,STATE,CAPTURE_ACTIVE")); return; }
-  if (count != 11) { Serial.println(F("@ERR,CONFIG,FORMAT")); return; }
+  if (capturing) { out.println(F("@ERR,STATE,CAPTURE_ACTIVE")); return; }
+  if (count != 11) { out.println(F("@ERR,CONFIG,FORMAT")); return; }
   byte values[10];
   for (byte i = 0; i < 10; ++i) {
     if (!parseByteValue(tokens[i + 1], values[i]) || (i >= 5 && values[i] > 1)) {
-      Serial.println(F("@ERR,CONFIG,FORMAT")); return;
+      out.println(F("@ERR,CONFIG,FORMAT")); return;
     }
   }
   SensorConfig candidate = {values[0], values[1], values[2], values[3], values[4],
     (bool)values[5], (bool)values[6], (bool)values[7], (bool)values[8], (bool)values[9]};
-  if (!validConfig(candidate)) { Serial.println(F("@ERR,CONFIG,PINS_OR_ROLE")); return; }
+  if (!validConfig(candidate)) { out.println(F("@ERR,CONFIG,PINS_OR_ROLE")); return; }
   if (configured) releasePins();
   config = candidate;
   configurePins();
   configured = true;
-  Serial.println(F("@OK,CONFIG"));
+  out.println(F("@OK,CONFIG"));
 }
 
 void handleEnable(char **tokens, byte count) {
-  if (count != 3) { Serial.println(F("@ERR,ENABLE,FORMAT")); return; }
-  if (!configured) { Serial.println(F("@ERR,STATE,NOT_CONFIGURED")); return; }
+  if (count != 3) { out.println(F("@ERR,ENABLE,FORMAT")); return; }
+  if (!configured) { out.println(F("@ERR,STATE,NOT_CONFIGURED")); return; }
   byte flag;
-  if (!parseByteValue(tokens[2], flag) || flag > 1) { Serial.println(F("@ERR,ENABLE,FORMAT")); return; }
+  if (!parseByteValue(tokens[2], flag) || flag > 1) { out.println(F("@ERR,ENABLE,FORMAT")); return; }
   SensorConfig candidate = config;
   if (strcmp(tokens[1], "HC") == 0) candidate.hcEnabled = flag;
   else if (strcmp(tokens[1], "PIR") == 0) candidate.pirEnabled = flag;
   else if (strcmp(tokens[1], "RADAR") == 0) candidate.radarEnabled = flag;
   else if (strcmp(tokens[1], "LUX") == 0) candidate.luxEnabled = flag;
   else if (strcmp(tokens[1], "SOUND") == 0) candidate.soundEnabled = flag;
-  else { Serial.println(F("@ERR,ENABLE,SENSOR")); return; }
-  if (!validConfig(candidate)) { Serial.println(F("@ERR,CONFIG,PINS_OR_ROLE")); return; }
+  else { out.println(F("@ERR,ENABLE,SENSOR")); return; }
+  if (!validConfig(candidate)) { out.println(F("@ERR,CONFIG,PINS_OR_ROLE")); return; }
   releasePins();
   config = candidate;
   configurePins();
-  Serial.print(F("@OK,ENABLE,")); Serial.print(tokens[1]); Serial.print(','); Serial.println(flag);
+  out.print(F("@OK,ENABLE,")); out.print(tokens[1]); out.print(','); out.println(flag);
 }
 
 void handleCommand(char *line) {
@@ -161,24 +162,25 @@ void handleCommand(char *line) {
   // Conserva los campos vacios para rechazarlos; no utiliza strtok().
   for (char *cursor = line; *cursor; ++cursor) {
     if (*cursor == ',') {
-      if (count >= 12) { Serial.println(F("@ERR,COMMAND,FORMAT")); return; }
+      if (count >= 12) { out.println(F("@ERR,COMMAND,FORMAT")); return; }
       *cursor = '\0'; tokens[count++] = cursor + 1;
     }
   }
   if (strcmp(tokens[0], "INFO") == 0 && count == 1) {
-    Serial.print(F("@OK,INFO,2,")); Serial.println(ORIGIN);
-  } else if (strcmp(tokens[0], "SIGNAL_CAPS") == 0 && count == 1) Serial.println(F("@OK,SIGNAL_CAPS,1"));
+    out.print(F("@OK,INFO,2,")); out.println(ORIGIN);
+  } else if (strcmp(tokens[0], "POLL") == 0 && count == 1) pollSlave();
+  else if (strcmp(tokens[0], "SIGNAL_CAPS") == 0 && count == 1) out.println(F("@OK,SIGNAL_CAPS,1"));
   else if (strcmp(tokens[0], "SIGNAL") == 0) handleSignal(tokens, count);
   else if (strcmp(tokens[0], "CONFIG") == 0) handleConfig(tokens, count);
   else if (strcmp(tokens[0], "ENABLE") == 0) handleEnable(tokens, count);
   else if (strcmp(tokens[0], "STOP") == 0 && count == 1) {
-    capturing = false; clearSignal(); Serial.println(F("@OK,STOP"));
+    capturing = false; clearSignal(); out.println(F("@OK,STOP"));
   } else if (strcmp(tokens[0], "START") == 0 && count == 1) {
-    if (!configured) { Serial.println(F("@ERR,STATE,NOT_CONFIGURED")); return; }
-    if (capturing) { Serial.println(F("@ERR,STATE,CAPTURE_ACTIVE")); return; }
-    sequence = 0; captureStartedMs = lastSampleMs = millis(); capturing = true;
-    Serial.println(F("@OK,START"));
-  } else Serial.println(F("@ERR,COMMAND,UNKNOWN"));
+    if (!configured) { out.println(F("@ERR,STATE,NOT_CONFIGURED")); return; }
+    if (capturing) { out.println(F("@ERR,STATE,CAPTURE_ACTIVE")); return; }
+    sequence = 0; captureStartedMs = lastSampleMs = millis(); capturing = true; nanoCaptureUart = nanoReplyUart;
+    out.println(F("@OK,START"));
+  } else out.println(F("@ERR,COMMAND,UNKNOWN"));
 }
 
 void readCommands() {
@@ -186,8 +188,8 @@ void readCommands() {
     const char incoming = Serial.read();
     if (incoming == '\r') continue;
     if (incoming == '\n') {
-      if (inputOverflow) Serial.println(F("@ERR,COMMAND,TOO_LONG"));
-      else if (inputLength) { inputBuffer[inputLength] = '\0'; handleCommand(inputBuffer); }
+      if (inputOverflow) out.println(F("@ERR,COMMAND,TOO_LONG"));
+      else if (inputLength) { inputBuffer[inputLength] = '\0'; dispatchUsbCommand(inputBuffer); }
       inputLength = 0; inputOverflow = false;
     } else if (!inputOverflow) {
       if (inputLength < sizeof(inputBuffer) - 1) inputBuffer[inputLength++] = incoming;
@@ -197,27 +199,34 @@ void readCommands() {
 }
 
 void emitSample(unsigned long elapsedMs) {
-  Serial.print(ORIGIN); Serial.print(','); Serial.print(++sequence); Serial.print(',');
-  Serial.print(elapsedMs); Serial.print(F(",NA,"));
-  if (config.pirEnabled) Serial.print(digitalRead(config.pirPin)); else Serial.print(F("NA"));
-  Serial.print(',');
-  if (config.radarEnabled) Serial.print(digitalRead(config.radarPin)); else Serial.print(F("NA"));
-  Serial.println(F(",NA,NA"));
+  out.print(ORIGIN); out.print(','); out.print(++sequence); out.print(',');
+  out.print(elapsedMs); out.print(F(",NA,"));
+  if (config.pirEnabled) out.print(digitalRead(config.pirPin)); else out.print(F("NA"));
+  out.print(',');
+  if (config.radarEnabled) out.print(digitalRead(config.radarPin)); else out.print(F("NA"));
+  out.println(F(",NA,NA"));
 }
 
 void setup() {
   pinMode(LED_BUILTIN, OUTPUT);
   clearSignal();
   Serial.begin(115200);
+#ifdef MICROP_NANO_UART
+  Serial1.begin(9600);
+  nanoReplyUart = true;
+  out.println(F("@READY,2,NANO"));
+  nanoReplyUart = false;
+#endif
   // No configura sensores hasta recibir CONFIG; revisar el cableado primero.
-  Serial.print(F("@READY,2,")); Serial.println(ORIGIN);
+  out.print(F("@READY,2,")); out.println(ORIGIN);
 }
 
 void loop() {
+  readSlaveUart();
   readCommands();
   updateSignal();
   const unsigned long now = millis();
-  if (capturing && now - lastSampleMs >= SAMPLE_INTERVAL_MS) {
+  if (!nanoCaptureUart && capturing && now - lastSampleMs >= SAMPLE_INTERVAL_MS) {
     lastSampleMs = now; // No genera rafagas de filas para compensar tiempo perdido.
     emitSample(now - captureStartedMs);
   }

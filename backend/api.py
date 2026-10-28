@@ -182,7 +182,16 @@ def create_app(settings=None, factory=None):
         storage = service.store.health()
         return JSONResponse(status_code=200 if storage["ok"] else 503,
                             content={"ok": storage["ok"], "service": "microp-backend", "protocolVersion": 2,
-                                     "storage": storage, "boardsConnected": sum(item["connected"] for item in service.snapshots())})
+                                     "storage": storage, "boardsConnected": sum(item["connected"] for item in service.snapshots()),
+                                     **service.connection_status()})
+
+    @app.post(prefix + '/gateway/connect')
+    def gateway_connect(body: ConnectionRequest, service: Service):
+        return service.gateway_control('connect', body.port)
+
+    @app.post(prefix + '/gateway/disconnect')
+    def gateway_disconnect(service: Service):
+        return service.gateway_control('disconnect')
 
     @app.get(prefix + "/ports")
     def ports(service: Service):

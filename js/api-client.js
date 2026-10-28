@@ -86,6 +86,7 @@ export class ApiClient {
   accessExportUrl() { return this.url('/access/export.csv'); }
   mlStatus() { return this.request('/ml/status'); }
   predictions(query) { return this.request('/ml/predictions', { query }); }
+  gatewayControl(action, body) { return this.request(`/gateway/${action}`, { method: 'POST', body }); }
 
   control(origin, action, body) {
     return this.request(`/boards/${encodeURIComponent(origin)}/${action}`, {

@@ -6,7 +6,7 @@
     <meta name="description" content="Control y monitoreo de sensores desde Raspberry Pi · Grupo C" />
     <title>Panel de sensores · Grupo C</title>
     <link rel="icon" href="data:," />
-    <link rel="stylesheet" href="css/styles.css" />
+    <link rel="stylesheet" href="css/styles.css?v=final-1" />
   </head>
   <body>
     <main class="app-shell">
@@ -22,10 +22,19 @@
         <p>Para una Raspberry en tu red, abre su dirección: <code>http://IP_DE_LA_RASPBERRY:8001/</code>.</p>
         <p class="hint">Inicia Python desde MicroP. En Windows: <code>.\.venv\Scripts\python.exe -m backend</code>. En Raspberry: <code>.venv/bin/python -m backend --host 0.0.0.0</code>.</p>
       </section>
-      <section class="control-panel service-panel" aria-label="Estado de la Raspberry">
-        <div class="service-summary"><div><span>Raspberry</span><strong id="service-status" role="status">Conectando…</strong></div><div><span>Almacenamiento</span><strong id="storage-status">Comprobando…</strong></div></div>
+      <section class="control-panel service-panel" aria-label="Estado del backend">
+        <div class="service-summary"><div><span>Backend</span><strong id="service-status" role="status">Conectando…</strong></div><div><span>Almacenamiento</span><strong id="storage-status">Comprobando…</strong></div></div>
         <button id="refresh-ports" class="secondary" type="button" disabled>Actualizar puertos</button>
         <p id="service-error" class="hint" hidden></p>
+        <p id="backend-location" class="hint" role="status"></p>
+      </section>
+      <section id="gateway-panel" class="control-panel" aria-labelledby="gateway-title" hidden>
+        <h2 id="gateway-title">Uno maestro · Nano 33 BLE esclavo</h2>
+        <p>Una conexión UART con Raspberry. El Uno coordina al Nano por D2/D3; cada placa conserva sus sensores y capturas.</p>
+        <label class="port-field">UART del maestro<select id="gateway-port" disabled aria-label="UART del Uno maestro"></select></label>
+        <div class="button-row"><button id="gateway-connect" type="button" disabled>Conectar maestro y esclavo</button><button id="gateway-disconnect" class="secondary" type="button" disabled>Desconectar enlace</button></div>
+        <p id="gateway-state" class="hint" role="status"></p>
+        <p class="hint">Raspberry–Uno: 115200, 8N1. Uno–Nano: 9600, 8N1, consultas del maestro. Configura las placas después de conectar.</p>
       </section>
       <div id="message" class="message" role="status" aria-live="polite" hidden></div>
       <nav class="panel-navigation" aria-label="Secciones del panel"><button id="show-sensors" type="button" aria-pressed="true">Sensores</button><button id="show-experiments" class="secondary" type="button" aria-pressed="false">Ensayos y dataset</button><button id="show-access" class="secondary" type="button" aria-pressed="false">Acceso y ML</button></nav>

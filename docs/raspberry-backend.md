@@ -1,10 +1,12 @@
 # Backend Raspberry · Grupo C
 
+El montaje final utiliza un Uno R3 maestro y Nano 33 BLE esclavo por un unico UART GPIO. Consultar primero [integracion final](integracion-final.md) y usar `backend/config.raspberry.json`. Las instrucciones de USB independiente se mantienen para diagnostico y compatibilidad.
+
 ## Que hace esta etapa
 
-El backend es un programa Python que controla Uno y Nano por USB y guarda automaticamente sus mediciones e incidencias en SQLite. No necesita un navegador abierto para adquirir datos. Su API permite iniciar/detener, configurar, consultar y exportar CSV.
+El backend controla Uno y Nano por USB independiente o mediante la pasarela UART del maestro, y guarda automaticamente mediciones e incidencias en SQLite. No necesita un navegador abierto para adquirir datos. Su API permite iniciar/detener, configurar, consultar y exportar CSV.
 
-La pagina existente conserva su conexion USB directa al equipo donde se abre. El panel remoto de `feat/panel-web`, disponible en `/`, consulta esta API; el diagnostico USB mantiene su entrada independiente. Ver la [guia del panel](panel-web.md). Raspberry no necesita Node.js, interfaz grafica, GPIO, un servidor de base de datos adicional ni ML para ejecutar este backend.
+La pagina de diagnostico conserva su conexion USB directa al equipo donde se abre. El panel remoto disponible en `/` consulta esta API. Ver la [guia del panel](panel-web.md). Raspberry no necesita Node.js, interfaz grafica ni un servidor de base de datos adicional. El montaje final utiliza GPIO para UART e inferencia ligera, sin instalar scikit-learn.
 
 Objetivo de despliegue confirmado: **Raspberry Pi Zero 2 W, 512 MB, Raspberry Pi OS Lite de 64 bits**. La instalacion y los ensayos fisicos en ese equipo siguen pendientes. Las pruebas actuales son de software, con perifericos simulados.
 
@@ -24,7 +26,7 @@ hostname -I
 
 Se requiere Python 3.11 o posterior y el modulo sqlite3. Registrar estas versiones, el espacio libre y la configuracion del reloj del sistema. La fecha/hora que se guarda es UTC del equipo receptor: verificar que la hora sea correcta antes de realizar ensayos.
 
-2. Confirmar adaptador OTG, hub USB para las dos placas, cables de datos y alimentacion adecuada. La Zero 2 W tiene un puerto de datos USB OTG; su otro micro USB es de alimentacion. Cerrar cualquier Monitor Serial o pagina que este usando esos mismos puertos.
+2. En el montaje final, seguir [UART GPIO y red USB](integracion-final.md): USB hacia PC, GPIO hacia Uno y UART del Uno hacia Nano. El hub con dos placas corresponde solo al diagnostico USB independiente anterior. Cerrar cualquier Monitor Serial que compita por el enlace.
 3. Identificar los modelos Arduino y cargar los firmwares nuevos de protocolo 2 segun la [pauta fisica](validacion-hardware.md). El backend no cambia el cableado ni carga sketches automaticamente.
 4. Instalar soporte de entorno virtual si falta:
 

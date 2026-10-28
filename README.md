@@ -1,6 +1,19 @@
 # Deteccion y seguridad de acceso · Grupo C · Solemne 2
 
-Herramienta local para comprobar sensores conectados a **dos Arduino independientes**, configurar sus pines, consultar graficos y exportar mediciones e incidencias. Incluye el diagnostico USB desarrollado en `feat/arduino-uno-nano` y el backend de `feat/raspberry-backend`.
+Sistema de adquisicion, ensayos, autorizacion e inferencia para **Uno R3 maestro, Nano 33 BLE esclavo y Raspberry Pi Zero 2 W**. El Uno coordina al Nano por UART D2/D3 y enlaza por GPIO con Raspberry. El PC abre el panel mediante red USB. Se conserva el diagnostico USB independiente de etapas anteriores.
+
+## Montaje final: comenzar aqui
+
+La [guia de integracion final](docs/integracion-final.md) contiene cableado, firmwares de las placas reales, preparacion de UART y red USB, instalacion y pauta fisica. En Raspberry, desde MicroP y despues de preparar su entorno:
+
+```sh
+.venv/bin/python -m backend.doctor --config backend/config.raspberry.json
+sh scripts/run-raspberry.sh
+```
+
+Abrir en PC `http://HOSTNAME_O_IP_DE_RASPBERRY:8001/` y pulsar **Conectar maestro y esclavo**. El panel muestra en que equipo corre Python y donde esta SQLite. Python, almacenamiento e inferencia corren en Raspberry; el entrenamiento corre en PC. Los comandos Windows de las secciones siguientes son para diagnostico/pruebas locales: guardan en el PC.
+
+Raspberry-Uno utiliza 115200, 8N1; Uno-Nano utiliza 9600, 8N1 con consultas del maestro. El Nano 33 BLE usa Serial1 para los pines UART. **El software no sustituye la validacion electrica ni fisica.** Dataset real, modelo entrenado real y demostracion siguen pendientes.
 
 La pagina de diagnostico conecta los Arduino por USB al **PC donde esta abierto el navegador**. El backend Python recibe las placas y guarda en SQLite. El panel permite consultar sensores, organizar ensayos, autorizar solicitudes de maqueta mediante PIN y ejecutar inferencia ML independiente. El montaje, dataset y modelo real evaluado siguen pendientes.
 
@@ -48,7 +61,7 @@ La [guia de Machine Learning](docs/machine-learning.md) explica entrenamiento/ev
 | UNO | HC-SR04, BH1750 y salida digital del modulo de sonido | `arduino/uno/uno.ino` | Core de placa, Wire, BH1750 de Christopher Laws |
 | NANO | HC-SR501 y RCWL-0516 | `arduino/nano/nano.ino` | Core de placa |
 
-Modelos exactos, pinout conectado, tensiones de los modulos y polaridad de sonido **pendientes de confirmar con quien tiene los equipos**. El repositorio anterior utiliza un LM393 digital; eso no confirma el modulo fisico actual. El rol que informa el firmware tampoco identifica el microcontrolador real.
+Modelos confirmados: Uno R3, Nano 33 BLE y Raspberry Zero 2 W. Nano TX llega a D2 del Uno y Nano RX a D3. El enlace hacia Raspberry usa GPIO14/15 y tierra comun, con adaptacion de senal. Pinout de sensores, tensiones de los modulos y polaridad de sonido **pendientes de validacion fisica**. El repositorio anterior utiliza un LM393 digital; eso no confirma el modulo fisico actual.
 
 La pagina propone Uno: Trigger D4, Echo D5, sonido DO D8; Nano: PIR D6 y radar D7. **Son sugerencias editables, no conexiones verificadas.** BH1750 utiliza SDA/SCL del bus I2C de la placa real; los pines A4/A5 del Uno clasico no se presentan como universales. Completar la [pauta de inventario y pruebas fisicas](docs/validacion-hardware.md) antes de declarar el montaje validado.
 
@@ -64,6 +77,8 @@ La pagina propone Uno: Trigger D4, Echo D5, sonido DO D8; Nano: PIR D6 y radar D
 - `js/experiments.js` y `js/experiments-view.js`: sesiones, ensayos, revision humana y exportacion en el panel.
 - `backend/experiments.py`, `experiment_store.py`, `dataset.py`, `migrations.py`: coordinacion, persistencia, caracteristicas y migracion SQLite.
 - `backend/access.py`, `credentials.py`, `ml_runtime.py`, `monitoring.py`: autorizacion, hash privado, inferencia ligera y supervision.
+- `backend/gateway.py`, `arduino/uno/gateway.h`, `arduino/nano/slave.h`: pasarela correlacionada, maestro y esclavo UART; conservan origen y protocolo de muestras.
+- `backend/config.raspberry.json`, `backend/doctor.py`, `scripts/run-raspberry.sh`: configuracion final, diagnostico de solo lectura y arranque en Raspberry.
 - `ml/` y `requirements-ml.txt`: entrenamiento/evaluacion offline en PC; entorno separado `.venv-ml/`.
 - `js/access.js` y `access-view.js`: estado y presentacion del modo de acceso y ML.
 - `panel.html`: entrada remota servida por el backend, sin Web Serial.

@@ -57,6 +57,7 @@ export class RemotePanel {
     this.disposed = false;
     this.timer = null;
     this.connectionVersion = 0;
+    this.gatewayPending = null;
   }
 
   emit() { if (!this.disposed) this.onChange(this); }
@@ -284,6 +285,27 @@ export class RemotePanel {
       board.revision += 1;
       this.emit();
       // Esperar un ciclo anterior y luego leer de nuevo, sin reproducir comandos.
+      if (this.inFlight) await this.inFlight;
+      await this.refresh(true);
+    }
+  }
+
+  async gatewayCommand(action, port) {
+    if (!this.online || (action === 'connect' && !this.storageOK)) throw new Error('Comprueba el backend y el almacenamiento.');
+    if (this.gatewayPending || ROLES.some(origin => this.boards[origin].pending || this.boards[origin].verifying)) {
+      throw new Error('Espera a que se verifique la operacion anterior del maestro.');
+    }
+    this.gatewayPending = action;
+    for (const origin of ROLES) { this.boards[origin].revision += 1; this.boards[origin].pending = action; }
+    this.emit();
+    try {
+      return await this.api.gatewayControl(action, action === 'connect' ? { port } : undefined);
+    } catch (error) {
+      for (const origin of ROLES) { this.boards[origin].verifying = true; this.boards[origin].error = error.message; }
+      throw error;
+    } finally {
+      this.gatewayPending = null;
+      for (const origin of ROLES) { this.boards[origin].pending = null; this.boards[origin].revision += 1; }
       if (this.inFlight) await this.inFlight;
       await this.refresh(true);
     }

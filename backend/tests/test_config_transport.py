@@ -37,3 +37,19 @@ def test_real_factory_only_opens_enumerated_ports_with_explicit_timeouts(monkeyp
     assert calls[0]["baudrate"] == 115200
     assert calls[0]["write_timeout"] == 4
     assert calls[0]["timeout"] == 0.1
+    assert (calls[0]['bytesize'], calls[0]['parity'], calls[0]['stopbits']) == (8, 'N', 1)
+
+
+def test_gateway_gpio_is_explicitly_configured_not_an_arbitrary_http_path(monkeypatch):
+    from types import SimpleNamespace
+    import os
+    monkeypatch.setattr('backend.transport.os', SimpleNamespace(name='posix', path=os.path))
+    factory = SerialFactory()
+    monkeypatch.setattr(factory, 'ports', lambda: [])
+    calls = []
+    monkeypatch.setattr('backend.transport.serial.Serial', lambda **kwargs: calls.append(kwargs) or object())
+    settings = Settings(transport='gateway', serial_port='/dev/serial0')
+    factory.open('/dev/serial0', settings)
+    assert calls[0]['port'] == '/dev/serial0' and calls[0]['exclusive']
+    with pytest.raises(DeviceUnavailable):
+        factory.open('/tmp/arbitrary-file', settings)

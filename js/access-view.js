@@ -81,10 +81,10 @@ export class AccessView {
     this.$('#access-result').textContent = result ? `${decisions[result.decision]} · Regla PIN: ${result.authorization === 'allow' ? 'permitido' : result.authorization === 'deny' ? 'rechazado' : 'sin evaluar'} · Señal: ${result.signal === 'confirmed' ? 'confirmada' : 'sin confirmar o no enviada'} · ${result.reason}` : state.lastRequestId ? `Solicitud ${state.lastRequestId}: resultado sin confirmar.` : 'Sin solicitudes en esta pestaña.';
     const ml = state.ml;
     const current = online && mode.active && ml.state === 'ready' && ml.latest?.label;
-    this.$('#ml-state').textContent = !online ? 'Sin consultar' : states[ml.state] ?? ml.state;
+    this.$('#ml-state').textContent = !online ? 'Sin consultar' : states[ml.modelState ?? ml.state] ?? ml.modelState ?? ml.state;
     this.$('#ml-label').textContent = current ? ml.latest.label === 'anomalo' ? 'Anómalo' : 'Normal' : 'Sin resultado actual';
     this.$('#ml-score').textContent = current ? ml.latest.score.toFixed(3) : '—';
-    this.$('#ml-details').textContent = [ml.error, ml.processingError, ml.modelId ? `Modelo ${ml.modelId} · ${ml.source}` : '', current ? `Ventana terminada ${ml.latest.endedAt}` : ''].filter(Boolean).join(' · ');
+    this.$('#ml-details').textContent = [states[ml.state], ml.error, ml.processingError, ml.modelId ? `Modelo ${ml.modelId} · ${ml.source}` : '', current ? `Ventana terminada ${ml.latest.endedAt}` : ''].filter(Boolean).join(' · ');
     this.$('#access-download').setAttribute('aria-disabled', String(!online));
     for (const [kind, values] of [['attempts', state.attempts], ['predictions', state.predictions]]) {
       const key = JSON.stringify(values);

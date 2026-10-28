@@ -43,7 +43,8 @@ function inlineError(selector, text) {
 }
 
 function renderPorts(state) {
-  const key = JSON.stringify([state.ports, ROLES.map(origin => state.boards[origin].snapshot.port)]);
+  const gateway = state.health?.transport?.mode === 'gateway';
+  const key = JSON.stringify([state.ports, gateway, ROLES.map(origin => state.boards[origin].snapshot.port)]);
   if (key === portsKey) return;
   portsKey = key;
   for (const origin of ROLES) {
@@ -60,7 +61,7 @@ function renderPorts(state) {
       const option = document.createElement("option");
       option.value = port.device;
       option.textContent = `${port.device}${port.description ? ` · ${port.description}` : ""}`;
-      option.disabled = ROLES.some(other => other !== origin && state.boards[other].snapshot.port === port.device);
+      option.disabled = !gateway && ROLES.some(other => other !== origin && state.boards[other].snapshot.port === port.device);
       return option;
     }));
     if ([...select.options].some(option => option.value === selected && !option.disabled)) select.value = selected;
@@ -73,9 +74,31 @@ function render(state) {
   $("#refresh-ports").disabled = !state.online || state.portsBusy;
   inlineError("#service-error", [...new Set([state.errors.connection, state.errors.health, state.errors.ports].filter(Boolean))].join(" "));
   renderPorts(state);
+  const transport = state.health?.transport;
+  const gateway = transport?.mode === 'gateway';
+  $('#gateway-panel').hidden = !gateway;
+  const runtime = state.health?.runtime;
+  $('#backend-location').textContent = runtime ? `Backend: ${runtime.hostname} (${runtime.platform}) · Datos: ${runtime.database} · ${gateway ? 'UART con Uno maestro' : 'USB independiente'}` : '';
+  if (gateway) {
+    const select = $('#gateway-port');
+    if (select.options[0]?.value !== transport.port) {
+      const option = document.createElement('option'); option.value = transport.port; option.textContent = transport.port;
+      select.replaceChildren(option);
+    }
+    const snapshots = ROLES.map(origin => state.boards[origin].snapshot);
+    const reserved = snapshots.some(item => item.trialId) || Boolean(experiments.active);
+    const busy = state.gatewayPending || transport.busy || snapshots.some(item => item.busy) || reserved || experiments.busy || access.busy;
+    $('#gateway-connect').disabled = !state.online || !state.storageOK || busy || access.status.active || snapshots.every(item => item.connected) || ROLES.some(origin => state.boards[origin].verifying);
+    $('#gateway-disconnect').disabled = !state.online || busy || !transport.connected;
+    $('#gateway-state').textContent = [state.gatewayPending ? 'Comprobando enlace…' : `${snapshots.filter(item => item.connected).length}/2 placas conectadas`, transport.lastError].filter(Boolean).join(' · ');
+  }
   for (const origin of ROLES) {
     const board = state.boards[origin];
     const snapshot = board.snapshot;
+    $(`#${origin}-port`).closest('label').hidden = gateway;
+    $(`#${origin}-connect`).hidden = gateway;
+    $(`#${origin}-disconnect`).hidden = gateway;
+    $(`#${origin}-panel h2`).textContent = gateway ? (origin === 'UNO' ? 'Uno R3 · maestro' : 'Nano 33 BLE · esclavo') : `Arduino ${origin === 'UNO' ? 'Uno' : 'Nano'}`;
     const accessReserved = Boolean(snapshot.accessReserved || access.status.active);
     const trialReserved = Boolean(snapshot.trialId || experiments.active);
     const ready = state.online && state.storageOK && !board.pending && !board.verifying && !snapshot.busy && !trialReserved && !experiments.busy && !access.busy;
@@ -102,6 +125,7 @@ function render(state) {
       toggle.checked = board.draft.enabled[key];
       toggle.disabled = !ready || accessReserved || !snapshot.connected || snapshot.phase === "starting";
       for (const [field] of sensor.pins) {
+        for (const option of $(`#${field}`).options) option.disabled = gateway && origin === 'UNO' && [2, 3].includes(Number(option.value));
         $(`#${field}`).value = String(board.draft[field]);
         $(`#${field}`).disabled = !ready || !snapshot.connected || capturing;
       }
@@ -177,6 +201,11 @@ async function perform(origin, action, body) {
     await panel.command(origin, action, body);
   } catch (error) { message(`${origin}: ${error.message}`, "error"); }
 }
+
+for (const action of ['connect', 'disconnect']) $('#gateway-' + action).addEventListener('click', async () => {
+  try { message(''); await panel.gatewayCommand(action, $('#gateway-port').value); }
+  catch (error) { message(error.message, 'error'); }
+});
 
 for (const origin of ROLES) {
   $(`#${origin}-port`).addEventListener("change", () => render(panel));
