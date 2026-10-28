@@ -13,6 +13,7 @@ class FakePort:
         self.queue = queue.Queue()
         self.pending = bytearray()
         self.on_command = None
+        self.signal_supported = True
         self.timeout = 0.005
 
     def open(self, settings):
@@ -55,6 +56,10 @@ class FakePort:
             self.emit(f"@OK,INFO,{self.version},{self.origin}\n")
         elif kind == "ENABLE":
             self.emit(f"@OK,ENABLE,{','.join(args)}\n")
+        elif kind == 'SIGNAL_CAPS':
+            self.emit('@OK,SIGNAL_CAPS,1\n' if self.signal_supported else '@ERR,COMMAND,UNKNOWN\n')
+        elif kind == 'SIGNAL':
+            self.emit(f'@OK,SIGNAL,{",".join(args)}\n')
         else:
             self.emit(f"@OK,{kind}\n")
         return len(data)

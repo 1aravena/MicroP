@@ -15,6 +15,7 @@ import uvicorn
 from backend.api import create_app
 from backend.config import Settings
 from backend.protocol import default_config
+from backend.credentials import set_pin
 from .fakes import FakeFactory
 
 
@@ -39,7 +40,10 @@ def fixture_app(database):
 
     for port in factory.devices.values():
         port.on_command = command
-    app = create_app(Settings(database=database, reset_delay=0), factory)
+    pin_path = Path(database).parent / 'qa-pin.json'
+    set_pin(pin_path, '804291')  # Credencial desechable de este fixture, no un PIN de produccion.
+    app = create_app(Settings(database=database, reset_delay=0, pin_file=str(pin_path),
+                              model_file=str(Path(database).parent / 'qa-model.json')), factory)
     app.router.routes[:] = [route for route in app.router.routes if getattr(route, "path", None) != "/"]
 
     @app.get("/")

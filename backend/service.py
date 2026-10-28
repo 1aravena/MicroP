@@ -5,9 +5,10 @@ import logging
 import queue
 import threading
 import time
+from uuid import UUID
 
 from .config import Settings
-from .errors import BackendError, CommandTimeout, DeviceUnavailable, StorageError, ValidationError
+from .errors import BackendError, CapabilityUnavailable, CommandTimeout, DeviceUnavailable, StorageError, ValidationError
 from .protocol import (FIELDS, ROLES, SENSOR_COMMANDS, SENSOR_KEYS, check_origin, default_config,
                        matches_ack, parse_identity, parse_sample, serialize_config)
 from .storage import Store, utc_now
@@ -33,7 +34,7 @@ class Board:
         self.state = {"origin": origin, "connected": False, "configured": False, "busy": False,
                       "phase": "disconnected", "port": None, "config": deepcopy(self.config),
                       "captureId": None, "sampleCount": 0, "latestSample": None,
-                      "lastReceivedAt": None, "lastError": None}
+                      "lastReceivedAt": None, "lastError": None, "signalSupported": False, "lastSignal": None}
         self.thread = threading.Thread(target=self._run, name=f"serial-{origin}", daemon=True)
 
     def update(self, **values):
@@ -90,7 +91,8 @@ class Board:
                 try:
                     handlers = {"connect": self._connect, "disconnect": self._disconnect,
                                 "config": self._configure, "start": self._start,
-                                "stop": self._stop, "enable": self._enable}
+                                "stop": self._stop, "enable": self._enable,
+                                "signal_caps": self._signal_caps, "signal": self._signal}
                     handlers[action](payload)
                 except StorageError as error:
                     self._storage_fault(error)
@@ -161,6 +163,35 @@ class Board:
     def _require_connection(self):
         if self.connection is None or not self.state["connected"]:
             raise BackendError("Primero conecta la placa.")
+
+    def _signal_caps(self, _):
+        self._require_connection()
+        if self.origin != 'NANO':
+            raise ValidationError('La senalizacion pertenece al Nano.')
+        self.update(signalSupported=False)
+        try:
+            self._command('SIGNAL_CAPS')
+        except DeviceUnavailable:
+            raise
+        except BackendError:
+            raise CapabilityUnavailable('Nano sin capacidad de senalizacion confirmada. Actualiza su firmware.') from None
+        self.update(signalSupported=True, lastError=None)
+
+    def _signal(self, payload):
+        self._require_connection()
+        if self.origin != 'NANO' or not self.state['signalSupported']:
+            raise DeviceUnavailable('Nano sin capacidad de senalizacion confirmada.')
+        request_id = str(UUID(payload['requestId']))
+        result = payload['result']
+        if result not in ('ALLOW', 'DENY', 'FAULT', 'OFF'):
+            raise ValidationError('Resultado de senal invalido.')
+        try:
+            self._command(f'SIGNAL,{request_id},{result}')
+        except Exception:
+            if result != 'OFF':
+                self._invalidate('signal_unconfirmed')
+            raise
+        self.update(lastSignal={'id': request_id, 'result': result}, lastError=None)
 
     def _connect(self, payload):
         if self.connection is not None:
@@ -291,7 +322,7 @@ class Board:
     def _drop(self, reason, status="interrupted"):
         was_connected = self.connection is not None
         self._best_effort_stop()
-        self.update(connected=False, configured=False, phase="disconnected", port=None)
+        self.update(connected=False, configured=False, phase="disconnected", port=None, signalSupported=False)
         try:
             self._end_capture(status, reason)
             if was_connected:
@@ -372,6 +403,9 @@ class AcquisitionService:
             board.thread.start()
         from .experiments import Experiments
         self.experiments = Experiments(self)
+        from .access import Access
+        self.access = Access(self)
+        self.access.start_workers()
 
     def board(self, origin):
         check_origin(origin)
@@ -379,14 +413,20 @@ class AcquisitionService:
 
     def snapshots(self):
         owner = getattr(getattr(self, 'experiments', None), 'active_id', None)
-        return [{**board.snapshot(), 'trialId': owner} for board in self.boards.values()]
+        reserved = bool(getattr(getattr(self, 'access', None), 'active', False))
+        return [{**board.snapshot(), 'trialId': owner, 'accessReserved': reserved} for board in self.boards.values()]
 
     def control(self, origin, action, payload=None):
         with self.experiments.individual():
+            if self.access.active:
+                if action not in ('stop', 'disconnect'):
+                    raise BackendError('Desactiva el modo de acceso antes de cambiar configuracion o capturas.')
+                self.access.disable('Detencion o desconexion solicitada por el operador.')
             return self.board(origin).submit(action, payload)
 
     def close(self):
         if not self.closed:
+            self.access.close()
             self.experiments.close()
             for board in self.boards.values():
                 board.close()

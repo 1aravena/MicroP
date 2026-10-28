@@ -25,13 +25,14 @@ using byte = unsigned char;
 #define LOW 0
 #define INPUT 0
 #define OUTPUT 1
+#define LED_BUILTIN 13
 #define F(x) x
 unsigned long fakeNow = 0, fakeEcho = 2300;
 int pinLevels[64] = {};
 unsigned long millis() { return fakeNow; }
 void delayMicroseconds(int) {}
 void pinMode(byte, int) {}
-void digitalWrite(byte, int) {}
+void digitalWrite(byte pin, int value) { pinLevels[pin] = value; }
 int digitalRead(byte pin) { return pinLevels[pin]; }
 unsigned long pulseIn(byte, int, unsigned long) { return fakeEcho; }
 struct SerialFake {
@@ -81,6 +82,20 @@ int main() {
   assert(Serial.output.find("UNO,2,2000,NA,NA,NA,NA,0") != std::string::npos);` : `pinLevels[6] = 1; Serial.output.clear(); emitSample(2000);
   assert(Serial.output.find("NANO,2,2000,NA,1,0,NA,NA") != std::string::npos);`}
   cmd("STOP"); assert(!capturing); cmd("START"); assert(sequence == 0);
+  ${origin === "nano" ? `cmd("SIGNAL_CAPS"); assert(Serial.output == "@OK,SIGNAL_CAPS,1\\n");
+  const char *id = "00000000-0000-0000-0000-000000000001";
+  cmd("SIGNAL,00000000-0000-0000-0000-000000000001,ALLOW");
+  assert(pinLevels[LED_BUILTIN] == HIGH); assert(capturing);
+  fakeNow += 1000; loop(); assert(pinLevels[LED_BUILTIN] == LOW); assert(!signalActive);
+  cmd("SIGNAL,00000000-0000-0000-0000-000000000001,ALLOW"); assert(!signalActive);
+  cmd("SIGNAL,00000000-0000-0000-0000-000000000001,DENY"); assert(Serial.output.find("ID_REUSED") != std::string::npos);
+  cmd("SIGNAL,invalid,DENY"); assert(Serial.output.find("@ERR") == 0);
+  cmd("SIGNAL,00000000-0000-0000-0000-000000000002,DENY");
+  assert(signalActive); fakeNow += 100; loop(); assert(pinLevels[LED_BUILTIN] == LOW);
+  fakeNow += 500; loop(); assert(!signalActive);
+  cmd("SIGNAL,00000000-0000-0000-0000-000000000003,FAULT"); assert(signalActive);
+  cmd("STOP"); assert(pinLevels[LED_BUILTIN] == LOW); assert(!signalActive);
+  cmd("SIGNAL,00000000-0000-0000-0000-000000000004,ALLOW"); assert(Serial.output.find("NOT_CAPTURING") != std::string::npos);` : ""}
   Serial.output.clear(); Serial.input = std::string(120, 'X') + "\\nINFO\\n"; readCommands();
   assert(Serial.output.find("TOO_LONG") != std::string::npos);
   assert(Serial.output.find("@OK,INFO,2,${origin.toUpperCase()}") != std::string::npos);

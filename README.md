@@ -2,7 +2,7 @@
 
 Herramienta local para comprobar sensores conectados a **dos Arduino independientes**, configurar sus pines, consultar graficos y exportar mediciones e incidencias. Incluye el diagnostico USB desarrollado en `feat/arduino-uno-nano` y el backend de `feat/raspberry-backend`.
 
-La pagina de diagnostico conecta los Arduino por USB al **PC donde esta abierto el navegador**. El backend Python recibe las placas y guarda en SQLite. El panel conecta con esa API, recupera capturas y permite organizar ensayos y exportar ventanas etiquetadas. Autorizacion, entrenamiento ML y recoleccion real siguen pendientes.
+La pagina de diagnostico conecta los Arduino por USB al **PC donde esta abierto el navegador**. El backend Python recibe las placas y guarda en SQLite. El panel permite consultar sensores, organizar ensayos, autorizar solicitudes de maqueta mediante PIN y ejecutar inferencia ML independiente. El montaje, dataset y modelo real evaluado siguen pendientes.
 
 ## Backend Raspberry
 
@@ -18,13 +18,28 @@ Incluye seleccion de puertos, controles independientes, configuracion, lecturas 
 
 Ver la [guia del panel, contrato de consultas y validacion](docs/panel-web.md). `index.html` conserva el diagnostico USB directo mediante localhost del PC o HTTPS, con su funcionamiento anterior. Las pruebas de software y las pruebas fisicas mantienen estados separados.
 
-La portada de GitHub Pages incluye **Abrir panel de ensayos**, hacia `panel.html#ensayos`. Pages permite ver la interfaz; para operar placas y sesiones hay que abrir el panel servido por Python en el PC o Raspberry. La version estatica muestra ese aviso y no intenta consultar una API inexistente en GitHub.
+La portada de GitHub Pages incluye **Abrir panel de ensayos** y **Acceso y ML**. Pages permite ver la interfaz; para operar placas y sesiones hay que abrir el panel servido por Python en el PC o Raspberry. La version estatica muestra ese aviso y no intenta consultar una API inexistente en GitHub.
 
 ## Ensayos y dataset
 
 La seccion **Ensayos y dataset** permite crear sesiones de entrenamiento o prueba, coordinar ambas placas, confirmar humanamente uno de cuatro escenarios y obtener ventanas de diez segundos con diez caracteristicas y validacion de calidad. Las sesiones cerradas se exportan con CSV, fuentes, exclusiones, diccionario, configuraciones, versiones y hashes. Las metas son 200 observaciones reales de entrenamiento y 100 de prueba; los datos simulados no cuentan.
 
-Ver la [guia de uso, API, migracion y procedimiento de recoleccion](docs/ensayos-dataset.md). SQLite pasa de esquema 1 a 2 con respaldo automatico previo y migracion transaccional. Reiniciar el backend para usar esta version. El piloto fisico y el dataset real aun no se han recolectado.
+Ver la [guia de uso, API y procedimiento de recoleccion](docs/ensayos-dataset.md). SQLite usa ahora esquema 3, con respaldo previo y migracion transaccional desde versiones 1/2. Reiniciar el backend para usar esta version. El piloto fisico y el dataset real aun no se han recolectado.
+
+## Acceso, fallas y Machine Learning
+
+La seccion **Acceso y ML** utiliza un PIN de demostracion y el LED integrado del Nano. Requiere ambas capturas sanas, conserva intentos e incidencias y se coordina con el modo de recoleccion. ML clasifica ventanas de sensores; nunca concede acceso por si solo. El panel continua destinado a la red local sin login de usuarios, con credenciales exclusivas de maqueta.
+
+Configurar el PIN con entrada oculta, desde MicroP, y reiniciar despues el servidor:
+
+```powershell
+.\.venv\Scripts\python.exe -m backend.credentials
+.\.venv\Scripts\python.exe -m backend
+```
+
+Abrir `http://127.0.0.1:8001/#acceso`. No existe PIN predeterminado. Ver la [guia de autorizacion y fallas](docs/acceso-y-fallas.md).
+
+La [guia de Machine Learning](docs/machine-learning.md) explica entrenamiento/evaluacion en PC, separacion por sesiones y exportacion JSON para inferencia sin scikit-learn en Raspberry. Las herramientas estan comprobadas con fixtures, pero todavia faltan datos reales, un modelo real evaluado y la demostracion fisica. Los modelos simulados no se admiten en el servidor normal.
 
 ## Placas y montaje
 
@@ -48,6 +63,9 @@ La pagina propone Uno: Trigger D4, Echo D5, sonido DO D8; Nano: PIR D6 y radar D
 - `js/sensor-ui.js`: tarjetas y tema compartidos.
 - `js/experiments.js` y `js/experiments-view.js`: sesiones, ensayos, revision humana y exportacion en el panel.
 - `backend/experiments.py`, `experiment_store.py`, `dataset.py`, `migrations.py`: coordinacion, persistencia, caracteristicas y migracion SQLite.
+- `backend/access.py`, `credentials.py`, `ml_runtime.py`, `monitoring.py`: autorizacion, hash privado, inferencia ligera y supervision.
+- `ml/` y `requirements-ml.txt`: entrenamiento/evaluacion offline en PC; entorno separado `.venv-ml/`.
+- `js/access.js` y `access-view.js`: estado y presentacion del modo de acceso y ML.
 - `panel.html`: entrada remota servida por el backend, sin Web Serial.
 - `js/charts.js`: graficos separados por origen; tiempo relativo en USB y fecha/hora de recepcion en el panel Raspberry.
 - `tests/`: pruebas automatizadas y perifericos simulados exclusivos de prueba.
@@ -144,7 +162,7 @@ La interfaz se comprobo adicionalmente en Chrome de escritorio y vista movil, in
 - [ ] Compilar usando los cores de los modelos reales y registrar memoria/versiones.
 - [ ] Completar y adjuntar evidencias de la pauta fisica.
 
-La validacion fisica de Uno/Nano permanece pendiente hasta completar esos puntos. El backend y el panel incluyen gestion de ensayos y preparacion del dataset; la recoleccion real, autorizacion y ML siguen pendientes. La pagina USB conserva su funcionamiento independiente.
+La validacion fisica de Uno/Nano permanece pendiente hasta completar esos puntos. Acceso y herramientas ML estan implementados como software; la recoleccion, entrenamiento real y demostracion fisica siguen pendientes. La pagina USB conserva su funcionamiento independiente.
 
 ## Fuentes tecnicas
 

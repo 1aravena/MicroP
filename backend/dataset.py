@@ -12,6 +12,7 @@ import zipfile
 from .errors import BackendError, ValidationError
 from .protocol import default_config
 from .storage import utc_now
+from .migrations import SCHEMA_VERSION
 
 FEATURE_VERSION = 1
 WINDOW_MS = 10000
@@ -382,7 +383,7 @@ def export_dataset(store, repository, session_ids):
                       'Las mediciones simuladas nunca acreditan el requisito de observaciones reales.\n')
             write_text('README.txt', [readme])
             from .experiments import SCENARIOS
-            manifest = {'schemaVersion': 2, 'featureVersion': FEATURE_VERSION, 'generatedAt': utc_now(), 'source': source_kind,
+            manifest = {'schemaVersion': SCHEMA_VERSION, 'featureVersion': FEATURE_VERSION, 'generatedAt': utc_now(), 'source': source_kind,
                         'scenarios': SCENARIOS,
                         'sessions': sessions, 'trials': trials, 'policy': POLICY, 'counts': counts,
                         'balanceByScenario': [{'partition': key[0], 'scenario': key[1], 'count': value} for key, value in sorted(balance.items())],

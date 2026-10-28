@@ -81,7 +81,7 @@ Las transiciones no se interpolan a través de faltantes, saltos de secuencia, h
 
 Metadatos exportados: `observation_id`, `session_id`, `trial_id`, `capture_uno_id`, `capture_nano_id`, `scenario`, `window_start`, `window_end`, `label`. La partición, responsable, procedencia, condiciones y configuración se consultan en el manifiesto. **Ninguno de esos metadatos es una variable de entrada del futuro modelo.**
 
-Esta rama no imputa, normaliza, entrena, genera predicciones ni calcula accuracy/F1. En la etapa de ML se elegirá un modelo compatible con faltantes o se ajustará la imputación exclusivamente con entrenamiento, sin consultar prueba.
+La preparacion del dataset no imputa ni modifica las fuentes. La [etapa de ML](machine-learning.md) incorpora imputacion y escalado aprendidos exclusivamente de entrenamiento, regresion logistica y evaluacion sobre prueba reservada; sus predicciones permanecen separadas de las etiquetas humanas.
 
 ## Coordinación y recuperación
 
@@ -95,11 +95,11 @@ Los comandos HTTP no se repiten automáticamente tras timeout. Se vuelve a consu
 
 ## SQLite y migración
 
-Esquema actual: **2**. Mantiene `captures`, `samples`, `incidents`; añade `collection_sessions`, `trials`, `trial_captures`, `observations` e índices. Una captura solo puede vincularse a un ensayo y cada ensayo tiene como máximo una captura por origen. No se altera el firmware, el protocolo ni las cabeceras de los CSV originales.
+Esquema actual: **3**. La etapa de dataset introdujo `collection_sessions`, `trials`, `trial_captures`, `observations` e índices sobre las tablas originales. La etapa de acceso agrega intentos, bloqueo e inferencias por separado; ver [acceso y migracion](acceso-y-fallas.md). Una captura solo puede vincularse a un ensayo y cada ensayo tiene como máximo una captura por origen. Las cabeceras de los CSV originales se conservan.
 
-Al abrir una base de esquema 1, primero se respalda mediante SQLite backup a `<base>.schema1-<UTC>-<id>.bak` en la misma carpeta. La migración se ejecuta en una transacción; ante fallo revierte sin borrar ni recrear la base. Las bases nuevas se crean en 2 sin respaldo innecesario. Versiones desconocidas se rechazan. Se mantiene el bloqueo de instancia existente.
+Al abrir una base de esquema 1/2, primero se respalda mediante SQLite backup a `<base>.schema<version>-<UTC>-<id>.bak` en la misma carpeta. La migración se ejecuta en una transacción; ante fallo revierte sin borrar ni recrear la base. Las bases nuevas se crean en 3 sin respaldo innecesario. Versiones desconocidas se rechazan. Se mantiene el bloqueo de instancia existente.
 
-Detener el backend anterior y reiniciarlo con esta versión. **Una versión antigua que solo admite esquema 1 no abrirá el esquema 2.** Para volver atrás hay que detener el servicio y restaurar deliberadamente el respaldo, conservando primero cualquier dato nuevo. No sobrescribir una base en uso. `data/` y sus respaldos siguen fuera de Git y de los recursos públicos.
+Detener el backend anterior y reiniciarlo con esta versión. **Las versiones antiguas pueden rechazar el esquema 3.** Para volver atrás hay que detener el servicio y restaurar deliberadamente el respaldo, conservando primero cualquier dato nuevo. No sobrescribir una base en uso. `data/` y sus respaldos siguen fuera de Git y de los recursos públicos.
 
 ## API
 

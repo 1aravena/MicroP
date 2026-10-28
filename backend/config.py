@@ -14,6 +14,8 @@ class Settings:
     reset_delay: float = 1.5
     read_timeout: float = 0.1
     stale_after: float = 3.5
+    pin_file: str = "data/access-pin.json"
+    model_file: str = "data/model.json"
 
     @classmethod
     def load(cls, path=None):
@@ -29,6 +31,8 @@ class Settings:
             raise ValidationError("database y host deben ser textos no vacios.")
         if type(result.port) is not int or not 1 <= result.port <= 65535:
             raise ValidationError("Puerto HTTP invalido.")
+        if any(not isinstance(getattr(result, key), str) or not getattr(result, key) for key in ('pin_file', 'model_file')):
+            raise ValidationError('pin_file y model_file deben ser rutas no vacias.')
         for key in ("command_timeout", "read_timeout", "stale_after"):
             if type(getattr(result, key)) not in (int, float) or not 0 < getattr(result, key) <= 60:
                 raise ValidationError(f"{key} debe estar entre 0 y 60 segundos.")

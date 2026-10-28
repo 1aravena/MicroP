@@ -97,3 +97,23 @@ Seguir la [guia de ensayos](ensayos-dataset.md). Los resultados simulados de sof
 - [ ] Verificar al menos 100 ventanas reales de prueba adicionales al entrenamiento; revisar balance 200/100.
 - [ ] Cerrar sesiones, exportar ZIP y verificar hashes y ausencia de sesiones compartidas entre conjuntos.
 - [ ] Adjuntar manifiesto, CSV, resultados, condiciones, limitaciones y evidencias reales.
+
+## Acceso, LED y ML — validacion real pendiente
+
+Seguir [acceso y fallas](acceso-y-fallas.md) y [Machine Learning](machine-learning.md). No conectar cerraduras reales ni GPIO de Raspberry. Confirmar el LED integrado, su polaridad y el core de la placa antes de cargar el Nano actualizado.
+
+| Ensayo | Resultado esperado | Resultado observado / evidencia |
+| --- | --- | --- |
+| Arranque, STOP y perdida USB del Nano | LED apagado o termina autonomamente su patron en menos de dos segundos | Pendiente |
+| PIN correcto con ambas capturas sanas | Intento registrado, un segundo de LED y ACK correlacionado | Pendiente |
+| PIN incorrecto | Rechazo registrado y tres destellos | Pendiente |
+| Cinco errores en 60 s y reinicio | Bloqueo de 60 s conservado, sin repeticion de intentos | Pendiente |
+| Recargar/abrir otra pestana durante acceso | Mismo modo y capturas; no se envia otra solicitud | Pendiente |
+| Intentar ensayo durante acceso | Conflicto explicado; recoleccion disponible al desactivar modo | Pendiente |
+| Perdida de una placa o datos antiguos | Acceso suspendido, fuentes conservadas; la otra captura independiente puede continuar | Pendiente |
+| Modelo ausente o error exclusivo de ML | PIN conserva su regla, ML indica indisponibilidad | Pendiente |
+| Modelo real sobre dos patrones en vivo | Clasificacion y ventana identificables, limitaciones registradas | Pendiente |
+| PIN valido/invalido y ML normal/anomalo | La clase no concede ni cambia el permiso por PIN | Pendiente |
+| Captura prolongada con inferencia y descargas | Registrar memoria, latencia, continuidad y archivos | Pendiente |
+
+Adjuntar dataset real, al menos 100 observaciones utilizables de prueba, JSON del modelo, informes de validacion/evaluacion, CSV de intentos, incidencias, esquematicos y video. No completar resultados observados con salidas de los fixtures.

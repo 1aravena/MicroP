@@ -19,6 +19,49 @@ unsigned long captureStartedMs = 0, lastSampleMs = 0, sequence = 0;
 char inputBuffer[96];
 byte inputLength = 0;
 bool inputOverflow = false;
+bool signalActive = false;
+unsigned long signalStartedMs = 0;
+byte signalPattern = 0;
+char lastSignalId[37] = "";
+byte lastSignalPattern = 0;
+
+void clearSignal() {
+  signalActive = false;
+  digitalWrite(LED_BUILTIN, LOW);
+}
+
+void updateSignal() {
+  if (!signalActive) return;
+  const unsigned long elapsed = millis() - signalStartedMs;
+  const unsigned long duration = signalPattern == 1 ? 1000UL : signalPattern == 2 ? 600UL : 1000UL;
+  if (elapsed >= duration) { clearSignal(); return; }
+  digitalWrite(LED_BUILTIN, signalPattern == 1 || (elapsed / 100UL) % 2 == 0 ? HIGH : LOW);
+}
+
+bool validSignalId(const char *text) {
+  if (strlen(text) != 36) return false;
+  for (byte i = 0; i < 36; ++i) {
+    const char c = text[i];
+    if (i == 8 || i == 13 || i == 18 || i == 23) { if (c != '-') return false; }
+    else if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f'))) return false;
+  }
+  return true;
+}
+
+void handleSignal(char **tokens, byte count) {
+  if (count != 3 || !validSignalId(tokens[1])) { Serial.println(F("@ERR,SIGNAL,FORMAT")); return; }
+  byte pattern = strcmp(tokens[2], "ALLOW") == 0 ? 1 : strcmp(tokens[2], "DENY") == 0 ? 2 : strcmp(tokens[2], "FAULT") == 0 ? 3 : strcmp(tokens[2], "OFF") == 0 ? 0 : 255;
+  if (pattern == 255) { Serial.println(F("@ERR,SIGNAL,FORMAT")); return; }
+  if (strcmp(lastSignalId, tokens[1]) == 0) {
+    if (lastSignalPattern != pattern) { Serial.println(F("@ERR,SIGNAL,ID_REUSED")); return; }
+  } else {
+    if (pattern != 0 && !capturing) { Serial.println(F("@ERR,STATE,NOT_CAPTURING")); return; }
+    strcpy(lastSignalId, tokens[1]); lastSignalPattern = pattern;
+    clearSignal(); signalPattern = pattern;
+    if (pattern) { signalActive = true; signalStartedMs = millis(); updateSignal(); }
+  }
+  Serial.print(F("@OK,SIGNAL,")); Serial.print(tokens[1]); Serial.print(','); Serial.println(tokens[2]);
+}
 
 
 bool addPin(byte pin, byte *used, byte &count) {
@@ -124,10 +167,12 @@ void handleCommand(char *line) {
   }
   if (strcmp(tokens[0], "INFO") == 0 && count == 1) {
     Serial.print(F("@OK,INFO,2,")); Serial.println(ORIGIN);
-  } else if (strcmp(tokens[0], "CONFIG") == 0) handleConfig(tokens, count);
+  } else if (strcmp(tokens[0], "SIGNAL_CAPS") == 0 && count == 1) Serial.println(F("@OK,SIGNAL_CAPS,1"));
+  else if (strcmp(tokens[0], "SIGNAL") == 0) handleSignal(tokens, count);
+  else if (strcmp(tokens[0], "CONFIG") == 0) handleConfig(tokens, count);
   else if (strcmp(tokens[0], "ENABLE") == 0) handleEnable(tokens, count);
   else if (strcmp(tokens[0], "STOP") == 0 && count == 1) {
-    capturing = false; Serial.println(F("@OK,STOP"));
+    capturing = false; clearSignal(); Serial.println(F("@OK,STOP"));
   } else if (strcmp(tokens[0], "START") == 0 && count == 1) {
     if (!configured) { Serial.println(F("@ERR,STATE,NOT_CONFIGURED")); return; }
     if (capturing) { Serial.println(F("@ERR,STATE,CAPTURE_ACTIVE")); return; }
@@ -161,6 +206,8 @@ void emitSample(unsigned long elapsedMs) {
 }
 
 void setup() {
+  pinMode(LED_BUILTIN, OUTPUT);
+  clearSignal();
   Serial.begin(115200);
   // No configura sensores hasta recibir CONFIG; revisar el cableado primero.
   Serial.print(F("@READY,2,")); Serial.println(ORIGIN);
@@ -168,6 +215,7 @@ void setup() {
 
 void loop() {
   readCommands();
+  updateSignal();
   const unsigned long now = millis();
   if (capturing && now - lastSampleMs >= SAMPLE_INTERVAL_MS) {
     lastSampleMs = now; // No genera rafagas de filas para compensar tiempo perdido.

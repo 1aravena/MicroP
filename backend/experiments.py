@@ -91,6 +91,8 @@ class Experiments:
                 return trial
             if self.active_id or self.individual_controls:
                 raise BackendError('Hay un ensayo o control individual en curso.')
+            if getattr(getattr(self.service, 'access', None), 'active', False):
+                raise BackendError('Desactiva el modo de acceso antes de iniciar un ensayo.')
             if trial['status'] != 'prepared' or self.repository.session(trial['sessionId'])['status'] != 'open':
                 raise BackendError('Solo puede iniciarse un ensayo preparado de una sesion abierta.')
             snapshots = self.service.snapshots()

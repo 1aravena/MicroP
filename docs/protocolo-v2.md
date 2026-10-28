@@ -1,5 +1,7 @@
 # Protocolo serial 2
 
+La extension opcional de senalizacion del Nano incorpora `SIGNAL_CAPS` y `SIGNAL,<uuid>,ALLOW|DENY|FAULT|OFF`, con ACK correlacionado, patrones no bloqueantes y apagado autonomo. Ver el [contrato de acceso](acceso-y-fallas.md#led-y-protocolo). INFO, adquisicion, mascaras y las ocho columnas de sensores conservan su formato. El backend comprueba esta capacidad solo al activar acceso; el firmware anterior sigue siendo util para adquisicion.
+
 Contrato comun de los firmwares Uno/Nano, la pagina de diagnostico y el backend Python. Transporte: USB/serial, 115200 baudios, 8N1, una linea por mensaje terminada en LF. Se acepta CRLF. Los comandos distinguen mayusculas y no admiten espacios ni campos vacios. No hay checksum adicional en esta version: se valida estructura, origen, tipos, rangos y secuencia; no se afirma detectar toda corrupcion posible.
 
 ## Identidad y ciclo de vida

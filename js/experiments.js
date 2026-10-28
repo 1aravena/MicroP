@@ -27,7 +27,7 @@ export class Experiments {
   }
 
   emit() { if (!this.disposed) this.onChange(this); }
-  get reserved() { return Boolean(this.active); }
+  get reserved() { return Boolean(this.active || this.accessReserved); }
   get canControl() { return this.online && !this.busy; }
   get exportIds() { return [...this.exportSelection.keys()]; }
 

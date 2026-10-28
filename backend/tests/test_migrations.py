@@ -20,7 +20,7 @@ def test_schema1_backup_and_upgrade_preserve_records(tmp_path):
     store = Store(path)
     backup = store.migration_backup
     try:
-        assert store.health()['schemaVersion'] == 2
+        assert store.health()['schemaVersion'] == 3
         assert store.capture('original')['origin'] == 'UNO'
         assert store.page('incidents')['items'][0]['description'] == 'registro original'
         assert store.connection.execute('SELECT COUNT(*) FROM observations').fetchone()[0] == 0
@@ -50,10 +50,34 @@ def test_failed_migration_rolls_back_without_recreating_database(tmp_path, monke
         assert db.execute("SELECT COUNT(*) FROM sqlite_master WHERE name='trials'").fetchone()[0] == 0
 
 
-def test_fresh_schema2_does_not_create_unnecessary_backup(tmp_path):
+def test_fresh_schema3_does_not_create_unnecessary_backup(tmp_path):
     store = Store(tmp_path / 'new.sqlite3')
     try:
         assert store.migration_backup is None
-        assert store.health()['schemaVersion'] == 2
+        assert store.health()['schemaVersion'] == 3
     finally:
         store.close()
+
+
+def test_schema2_backup_and_rollback_preserve_experiments(tmp_path, monkeypatch):
+    path = tmp_path / 'schema2.sqlite3'
+    legacy(path)
+    with sqlite3.connect(path) as db:
+        db.executescript(migrations.SCHEMA_2)
+        db.execute("INSERT INTO collection_sessions(session_id,name,responsible,partition_name,source,conditions,notes,created_at) VALUES('s','original','QA','train','simulated','test','','t')")
+    original = migrations.SCHEMA_3
+    monkeypatch.setattr(migrations, 'SCHEMA_3', original + '\nINVALID SQL;')
+    with pytest.raises(StorageError):
+        Store(path)
+    with sqlite3.connect(path) as db:
+        assert db.execute('PRAGMA user_version').fetchone()[0] == 2
+        assert db.execute('SELECT name FROM collection_sessions').fetchone()[0] == 'original'
+        assert not db.execute("SELECT name FROM sqlite_master WHERE name='access_attempts'").fetchall()
+    monkeypatch.setattr(migrations, 'SCHEMA_3', original)
+    upgraded = Store(path)
+    try:
+        assert '.schema2-' in upgraded.migration_backup
+        assert upgraded.health()['schemaVersion'] == 3
+        assert upgraded.connection.execute('SELECT name FROM collection_sessions').fetchone()[0] == 'original'
+    finally:
+        upgraded.close()
