@@ -10,9 +10,9 @@ Desde la raíz de MicroP, con las dependencias existentes:
 .\.venv\Scripts\python.exe -m backend
 ```
 
-Abrir `http://127.0.0.1:8001/`. En Raspberry: `.venv/bin/python -m backend --host 0.0.0.0`, y abrir su IP desde la red local de confianza. Página y API comparten origen. Continúa sin cuentas, CORS abierto ni recursos externos.
+El comando Windows anterior es para pruebas locales y guarda en el PC. En el montaje final, ejecutar `sh scripts/run-raspberry.sh` en Raspberry y abrir su hostname/IP desde el PC por red USB. Ver [integracion final](integracion-final.md). Pagina y API comparten origen, sin cuentas ni CORS abierto.
 
-1. En **Sensores**, conectar cada placa al puerto correcto, revisar el cableado y aplicar su configuración con todos los sensores habilitados. Detener las capturas individuales antes de preparar el ensayo.
+1. En **Sensores**, pulsar **Conectar maestro y esclavo** en modo UART (o conectar los dos USB en modo independiente), revisar el cableado y aplicar la configuracion de cada placa con todos los sensores habilitados. Detener las capturas individuales antes de preparar el ensayo.
 2. En **Ensayos y dataset**, crear una sesión: nombre, responsable, conjunto `train` o `test`, procedencia `real` o `simulated`, condiciones y notas. Registrar posiciones medidas, iluminación, estabilización, disposición y versiones del montaje. Conjunto y procedencia quedan fijados desde su creación; no existe una operación para trasladar datos a otro conjunto.
 3. Preparar un ensayo con uno de los cuatro escenarios y sus notas. Cada ensayo pertenece a una sola sesión y mantiene un único escenario.
 4. Pulsar **Iniciar ensayo**. El backend crea dos capturas nuevas y reserva ambas placas. Los controles individuales quedan bloqueados; el botón global **Detener ensayo activo** permanece disponible en ambas secciones. Los cambios de pines que no se aplicaron en Sensores son borradores del navegador, ajenos a la configuración confirmada del backend.

@@ -1,6 +1,8 @@
 # Panel web · Grupo C
 
-El panel controla Uno y Nano conectados por USB al equipo que ejecuta el backend. La Raspberry recibe y guarda; el navegador del PC muestra y controla. La aplicación sirve página, recursos y API desde un único proceso, sin dependencias nuevas de ejecución ni conexión a internet.
+El panel admite USB independiente para diagnostico y el montaje final con Uno R3 maestro, Nano 33 BLE esclavo y un UART GPIO compartido. Raspberry recibe y guarda; el navegador del PC muestra y controla a traves de red USB. La aplicacion sirve pagina, recursos y API desde un proceso. Ver [integracion final](integracion-final.md) y `backend/config.raspberry.json`.
+
+En modo maestro se muestra una sola conexion del enlace, manteniendo controles y capturas por origen. La pagina informa hostname, sistema operativo y ubicacion de la base del backend; esto permite comprobar que Python esta ejecutandose en Raspberry y no en Windows. El modo USB anterior conserva sus selectores independientes.
 
 ## Abrir el panel
 

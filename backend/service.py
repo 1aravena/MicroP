@@ -5,6 +5,9 @@ import logging
 import queue
 import threading
 import time
+import platform
+import socket
+from pathlib import Path
 from uuid import UUID
 
 from .config import Settings
@@ -31,6 +34,7 @@ class Board:
         self.operation = threading.Lock()
         self.tasks = queue.Queue(maxsize=1)
         self.framer = LineFramer()
+        self.packet_received_at = None
         self.state = {"origin": origin, "connected": False, "configured": False, "busy": False,
                       "phase": "disconnected", "port": None, "config": deepcopy(self.config),
                       "captureId": None, "sampleCount": 0, "latestSample": None,
@@ -133,9 +137,10 @@ class Board:
             try:
                 data = self.connection.read(256)
             except Exception as error:
-                raise DeviceUnavailable(f"Fallo al recibir por USB: {error}") from error
+                raise DeviceUnavailable(f"Fallo al recibir por serial: {error}") from error
             if data:
                 self.framer.feed(data)
+                self.packet_received_at = getattr(self.connection, 'received_at', None)
         return self.framer.ready.popleft() if self.framer.ready else None
 
     def _command(self, command):
@@ -146,7 +151,7 @@ class Board:
             if self.connection.write(data) != len(data):
                 raise OSError("Escritura incompleta")
         except Exception as error:
-            raise DeviceUnavailable(f"Fallo al escribir por USB: {error}") from error
+            raise DeviceUnavailable(f"Fallo al escribir por serial: {error}") from error
         deadline = time.monotonic() + self.settings.command_timeout
         while not self.stopping.is_set():
             if time.monotonic() >= deadline:
@@ -202,8 +207,11 @@ class Board:
         self.framer = LineFramer()
         self.update(phase="connecting", port=port, lastError=None)
         try:
-            self.connection = self.factory.open(port, self.settings)
-            self.stopping.wait(self.settings.reset_delay)
+            if hasattr(self.factory, 'open_for'):
+                self.connection = self.factory.open_for(self.origin, port, self.settings)
+            else:
+                self.connection = self.factory.open(port, self.settings)
+                self.stopping.wait(self.settings.reset_delay)
             parse_identity(self._command("INFO"), self.origin)
             self._command("STOP")
             self.incident("CONNECTED", f"Protocolo 2 verificado en {port}; requiere CONFIG.")
@@ -221,6 +229,12 @@ class Board:
         if config.get("origin") != self.origin:
             raise ValidationError("Configuracion de otra placa.")
         command = serialize_config(config)
+        if self.settings.transport == 'gateway' and self.origin == 'UNO':
+            active_pins = ([config['hcTrigger'], config['hcEcho']] if config['enabled']['hc'] else [])
+            if config['enabled']['sound']:
+                active_pins.append(config['soundPin'])
+            if any(pin in (2, 3) for pin in active_pins):
+                raise ValidationError('D2/D3 del Uno estan reservados para UART con el Nano esclavo.')
         self.update(configured=False, phase="unconfigured")
         try:
             parse_identity(self._command("INFO"), self.origin)
@@ -365,7 +379,7 @@ class Board:
             return
         if line.startswith("@") or self.state["phase"] != "capturing" or not self.active_capture:
             return
-        received_at = utc_now()
+        received_at = self.packet_received_at or utc_now()
         try:
             sample = parse_sample(line, self.config)
             if sample["sequence"] <= self.last_sequence or sample["timeMs"] < self.last_device_time:
@@ -395,8 +409,13 @@ class AcquisitionService:
     def __init__(self, settings=None, factory=None):
         self.settings = settings or Settings()
         self.factory = factory or SerialFactory()
+        if self.settings.transport == 'gateway':
+            from .gateway import GatewayFactory, SharedRegistry
+            self.factory = GatewayFactory(self.settings, self.factory)
+            registry = SharedRegistry()
+        else:
+            registry = PortRegistry()
         self.store = Store(self.settings.database)
-        registry = PortRegistry()
         self.boards = {origin: Board(origin, self.store, self.factory, registry, self.settings) for origin in ROLES}
         self.closed = False
         for board in self.boards.values():
@@ -416,6 +435,41 @@ class AcquisitionService:
         reserved = bool(getattr(getattr(self, 'access', None), 'active', False))
         return [{**board.snapshot(), 'trialId': owner, 'accessReserved': reserved} for board in self.boards.values()]
 
+    def connection_status(self):
+        transport = self.factory.status() if self.settings.transport == 'gateway' else {'mode': 'usb', 'baudrate': 115200}
+        return {'transport': transport, 'runtime': {'hostname': socket.gethostname(), 'platform': platform.system(),
+                'database': str(Path(self.settings.database).resolve()) if self.settings.database != ':memory:' else ':memory:'}}
+
+    def gateway_control(self, action, port=None):
+        if self.settings.transport != 'gateway':
+            raise ValidationError('El backend esta en modo USB independiente.')
+        if not self.factory.control.acquire(blocking=False):
+            raise BackendError('Hay una operacion del maestro en curso.')
+        try:
+            with self.experiments.individual():
+                if self.access.active:
+                    if action == 'connect':
+                        raise BackendError('Desactiva acceso antes de reconectar el maestro.')
+                    self.access.disable('Desconexion del maestro solicitada por el operador.')
+                failures = []
+                for origin in (ROLES if action == 'connect' else tuple(reversed(ROLES))):
+                    board = self.board(origin)
+                    if action == 'connect' and board.snapshot()['connected']:
+                        continue
+                    try:
+                        board.submit(action, {'port': port or self.settings.serial_port} if action == 'connect' else None)
+                    except BackendError as error:
+                        failures.append(f'{origin}: {error}')
+                        if action == 'connect' and origin == 'UNO':
+                            break
+                if action == 'disconnect' and not self.factory.channels:
+                    self.factory.close()
+                if failures:
+                    raise DeviceUnavailable(' '.join(failures))
+                return {'items': self.snapshots(), **self.connection_status()}
+        finally:
+            self.factory.control.release()
+
     def control(self, origin, action, payload=None):
         with self.experiments.individual():
             if self.access.active:
@@ -430,5 +484,7 @@ class AcquisitionService:
             self.experiments.close()
             for board in self.boards.values():
                 board.close()
+            if self.settings.transport == 'gateway':
+                self.factory.close()
             self.store.close()
             self.closed = True

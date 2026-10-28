@@ -44,8 +44,9 @@ struct SerialFake {
   void print(unsigned char value) { print((unsigned int)value); }
   void print(float value, int digits) { std::ostringstream s; s << std::fixed << std::setprecision(digits) << value; output += s.str(); }
   template<class T> void println(T value) { print(value); output += '\n'; }
-} Serial;
+} Serial, Serial1;
 `;
+const softwareStub = '#pragma once\n#include "Arduino.h"\nstruct SoftwareSerial : SerialFake { SoftwareSerial(int,int) {} };\n';
 const bhStub = String.raw`#pragma once
 bool fakeLightFound = true;
 float fakeLux = 120.5f;
@@ -56,6 +57,7 @@ for (const origin of ["uno", "nano"]) test(`firmware ${origin}: parser, configur
   const directory = mkdtempSync(join(tmpdir(), "microp-firmware-"));
   try {
     writeFileSync(join(directory, "Arduino.h"), arduinoStub);
+    writeFileSync(join(directory, "SoftwareSerial.h"), softwareStub);
     writeFileSync(join(directory, "Wire.h"), "#pragma once\nstruct WireFake { void begin() {} } Wire;\n");
     writeFileSync(join(directory, "BH1750.h"), bhStub);
     const firmware = join(root, "arduino", origin, `${origin}.ino`).replaceAll("\\", "/");
@@ -107,6 +109,63 @@ int main() {
     assert.equal(build.status, 0, `${build.stdout}\n${build.stderr}`);
     const run = spawnSync(executable, [], { encoding: "utf8", env: environment });
     assert.equal(run.status, 0, `${run.stdout}\n${run.stderr}`);
+  } finally {
+    if (dirname(resolve(directory)) === resolve(tmpdir())) rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+for (const origin of ['uno', 'nano']) test(`firmware ${origin}: enlace maestro/esclavo correlacionado y aislamiento USB (dobles nativos)`, { skip: !available }, () => {
+  const directory = mkdtempSync(join(tmpdir(), 'microp-gateway-'));
+  try {
+    writeFileSync(join(directory, 'Arduino.h'), arduinoStub);
+    writeFileSync(join(directory, 'SoftwareSerial.h'), softwareStub);
+    writeFileSync(join(directory, 'Wire.h'), '#pragma once\nstruct WireFake { void begin() {} } Wire;\n');
+    writeFileSync(join(directory, 'BH1750.h'), bhStub);
+    const firmware = join(root, 'arduino', origin, `${origin}.ino`).replaceAll('\\', '/');
+    const body = origin === 'uno' ? String.raw`
+      Serial.input="GATEWAY_INFO\n"; loop();
+      assert(gatewayMode); assert(Serial.output.find("@OK,GATEWAY,1,UNO,NANO,9600")!=std::string::npos);
+      Serial.output.clear(); Serial.input="@TO,UNO,1,INFO\n"; loop();
+      assert(Serial.output=="@FROM,UNO,1,@OK,INFO,2,UNO\n");
+      Serial.input="@TO,UNO,2,CONFIG,2,5,6,7,8,1,0,0,1,1\n"; loop(); assert(!configured);
+      Serial.input="@TO,UNO,3,CONFIG,4,5,6,7,8,1,0,0,1,1\n"; loop(); assert(configured);
+      Serial.input="@TO,UNO,4,START\n"; loop(); assert(capturing);
+      Serial.output.clear(); Serial.input="@TO,NANO,8,INFO\n"; loop();
+      assert(nanoPending); assert(nanoBus.output=="@CALL,8,INFO\n");
+      fakeNow=500; loop(); assert(sequence==0); // No lectura bloqueante mientras recibe al esclavo.
+      nanoBus.input="@REPLY,7,@OK,INFO,2,NANO\n"; loop(); assert(nanoPending);
+      fakeNow=1000; nanoBus.input="@REPLY,8,@OK,INFO,2,NANO\n"; loop(); assert(!nanoPending); assert(sequence==1);
+      assert(Serial.output.find("@FROM,NANO,8,@OK,INFO,2,NANO")!=std::string::npos);
+      assert(Serial.output.find("@FROM,UNO,0,UNO,1,")!=std::string::npos);
+      Serial.output.clear(); Serial.input="@TO,NANO,9,POLL\n"; loop(); fakeNow+=801; loop();
+      assert(!nanoPending); assert(Serial.output.find("@FROM,NANO,9,@ERR,GATEWAY,NANO_TIMEOUT")!=std::string::npos);
+      Serial.output.clear(); Serial.input="INFO\n"; loop(); assert(!gatewayMode);
+      assert(Serial.output=="@OK,INFO,2,UNO\n");
+    ` : String.raw`
+      assert(Serial1.output=="@REPLY,0,@READY,2,NANO\n");
+      Serial1.output.clear(); Serial1.input="@CALL,1,INFO\n@CALL,2,CONFIG,4,5,6,7,8,0,1,1,0,0\n@CALL,3,START\n"; loop();
+      assert(capturing && nanoCaptureUart); assert(sequence==0);
+      assert(Serial1.output.find("@REPLY,3,@OK,START")!=std::string::npos);
+      Serial1.output.clear(); fakeNow=1000; loop(); assert(sequence==0); assert(Serial1.output.empty());
+      Serial1.input="@CALL,4,POLL\n"; loop(); assert(sequence==1);
+      assert(Serial1.output.find("@REPLY,0,NANO,1,1000,")!=std::string::npos);
+      assert(Serial1.output.find("@REPLY,4,@OK,POLL")!=std::string::npos);
+      Serial.input="STOP\n"; loop(); assert(capturing);
+      assert(Serial.output.find("UART_CAPTURE_ACTIVE")!=std::string::npos);
+      Serial1.output.clear(); Serial1.input="@CALL,5,SIGNAL_CAPS\n@CALL,6,SIGNAL,00000000-0000-0000-0000-000000000001,ALLOW\n"; loop();
+      assert(signalActive); assert(Serial1.output.find("@REPLY,6,@OK,SIGNAL,")!=std::string::npos);
+      fakeNow+=1001; loop(); assert(!signalActive); assert(pinLevels[LED_BUILTIN]==LOW);
+      Serial1.input="@CALL,7,STOP\n"; loop(); assert(!capturing);
+      Serial.input="CONFIG,4,5,6,7,8,0,1,1,0,0\nSTART\n"; loop(); assert(capturing && !nanoCaptureUart);
+      Serial1.input="@CALL,8,STOP\n"; loop(); assert(capturing);
+      assert(Serial1.output.find("USB_CAPTURE_ACTIVE")!=std::string::npos);
+    `;
+    writeFileSync(join(directory, 'gateway.cpp'), `#define ARDUINO_ARCH_MBED_NANO 1\n#include <cassert>\n#include <cstring>\n#include "${firmware}"\nint main(){ setup(); Serial.output.clear(); ${body} }\n`);
+    const executable = join(directory, process.platform === 'win32' ? 'gateway.exe' : 'gateway');
+    const build = spawnSync(compiler, ['-std=c++11', '-Wall', '-Wextra', `-I${directory}`, join(directory, 'gateway.cpp'), '-o', executable], { encoding: 'utf8', env: environment });
+    assert.equal(build.status, 0, build.stderr);
+    const run = spawnSync(executable, [], { encoding: 'utf8', env: environment });
+    assert.equal(run.status, 0, run.stdout + run.stderr);
   } finally {
     if (dirname(resolve(directory)) === resolve(tmpdir())) rmSync(directory, { recursive: true, force: true });
   }

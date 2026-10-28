@@ -22,10 +22,12 @@ class SerialFactory:
 
     def open(self, port, settings):
         available = {canonical_port(item["device"]) for item in self.ports()}
-        if canonical_port(port) not in available:
+        configured_uart = settings.transport == 'gateway' and port == settings.serial_port and os.name == 'posix'
+        if canonical_port(port) not in available and not configured_uart:
             raise DeviceUnavailable("El puerto no aparece entre los dispositivos disponibles.")
         try:
             return serial.Serial(port=port, baudrate=115200, timeout=settings.read_timeout,
+                                 bytesize=serial.EIGHTBITS, parity=serial.PARITY_NONE, stopbits=serial.STOPBITS_ONE,
                                  write_timeout=settings.command_timeout, exclusive=True if os.name == "posix" else None)
         except (serial.SerialException, OSError) as error:
             raise DeviceUnavailable(f"No se pudo abrir el puerto; revisa cable, permisos y otras aplicaciones: {error}") from error

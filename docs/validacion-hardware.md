@@ -2,15 +2,17 @@
 
 Esta pauta debe completarla quien tiene los equipos. Las pruebas automatizadas usan mensajes y perifericos simulados y **no acreditan que este montaje fisico haya sido probado**.
 
+Modelos confirmados por el equipo: Uno R3 maestro, Nano 33 BLE esclavo y Zero 2 W. Ver la [pauta de integracion final](integracion-final.md#pauta-final-con-equipos-reales). Nano TX va a D2 del Uno y Nano RX a D3, con niveles adecuados; Uno enlaza a GPIO14/15 de Raspberry. Estos datos no acreditan validacion de sensores, alimentacion o LED.
+
 ## Inventario antes de cargar
 
 | Dato | Estado / resultado observado |
 | --- | --- |
-| Modelo exacto Uno y microcontrolador | Pendiente |
-| Modelo exacto Nano y microcontrolador | Pendiente |
-| Paquete/core de cada placa y version | Pendiente |
+| Modelo exacto Uno y microcontrolador | Uno R3, ATmega328P; modelo confirmado por el equipo |
+| Modelo exacto Nano y microcontrolador | Nano 33 BLE, nRF52840; modelo confirmado por el equipo |
+| Paquete/core de cada placa y version | Compilacion PC: AVR 1.8.8 y Mbed Nano 4.6.0; registrar tambien el entorno usado al cargar |
 | Arduino IDE y version | Pendiente |
-| Biblioteca BH1750 y version | Pendiente |
+| Biblioteca BH1750 y version | Compilacion PC: BH1750 1.3.0; confirmar version usada al cargar |
 | Modelo del modulo de sonido | Pendiente |
 | Nivel DO en reposo / estimulo acustico | Pendiente |
 | Alimentacion, niveles logicos y tierra de cada modulo | Pendiente |
@@ -18,7 +20,7 @@ Esta pauta debe completarla quien tiene los equipos. Las pruebas automatizadas u
 
 ## Cableado
 
-No mover cables con el montaje energizado. Cada modulo debe compartir GND con la placa a la que pertenece. Confirmar tensiones segun las placas y modulos reales, especialmente si no son Uno R3/Nano clasico. No conectar estas senales de 5 V directamente a GPIO de Raspberry.
+No mover cables con el montaje energizado. Cada modulo debe compartir GND con la placa a la que pertenece. Nano 33 BLE y Raspberry usan GPIO de 3,3 V y no toleran senales de 5 V; comprobar la adaptacion en ambos enlaces con Uno R3 y las salidas de los sensores.
 
 | Placa | Funcion | Sugerencia de la pagina | Conexion real confirmada |
 | --- | --- | --- | --- |

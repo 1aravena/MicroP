@@ -21,9 +21,10 @@ char inputBuffer[96];
 byte inputLength = 0;
 bool inputOverflow = false;
 BH1750 lightMeter;
+#include "gateway.h"
 
 bool addPin(byte pin, byte *used, byte &count) {
-  if (pin < 2 || pin > 12) return false;
+  if (pin < 2 || pin > 12 || (gatewayMode && (pin == 2 || pin == 3))) return false;
   for (byte i = 0; i < count; ++i) if (used[i] == pin) return false;
   used[count++] = pin;
   return true;
@@ -75,53 +76,53 @@ bool parseByteValue(const char *text, byte &value) {
 }
 
 void handleConfig(char **tokens, byte count) {
-  if (capturing) { Serial.println(F("@ERR,STATE,CAPTURE_ACTIVE")); return; }
-  if (count != 11) { Serial.println(F("@ERR,CONFIG,FORMAT")); return; }
+  if (capturing) { out.println(F("@ERR,STATE,CAPTURE_ACTIVE")); return; }
+  if (count != 11) { out.println(F("@ERR,CONFIG,FORMAT")); return; }
   byte values[10];
   for (byte i = 0; i < 10; ++i) {
     if (!parseByteValue(tokens[i + 1], values[i]) || (i >= 5 && values[i] > 1)) {
-      Serial.println(F("@ERR,CONFIG,FORMAT")); return;
+      out.println(F("@ERR,CONFIG,FORMAT")); return;
     }
   }
   SensorConfig candidate = {values[0], values[1], values[2], values[3], values[4],
     (bool)values[5], (bool)values[6], (bool)values[7], (bool)values[8], (bool)values[9]};
-  if (!validConfig(candidate)) { Serial.println(F("@ERR,CONFIG,PINS_OR_ROLE")); return; }
+  if (!validConfig(candidate)) { out.println(F("@ERR,CONFIG,PINS_OR_ROLE")); return; }
   if (candidate.luxEnabled) {
     Wire.begin();
     if (!lightMeter.begin(BH1750::CONTINUOUS_HIGH_RES_MODE)) {
-      Serial.println(F("@ERR,CONFIG,BH1750_NOT_FOUND")); return;
+      out.println(F("@ERR,CONFIG,BH1750_NOT_FOUND")); return;
     }
   }
   if (configured) releasePins();
   config = candidate;
   configurePins();
   configured = true;
-  Serial.println(F("@OK,CONFIG"));
+  out.println(F("@OK,CONFIG"));
 }
 
 void handleEnable(char **tokens, byte count) {
-  if (count != 3) { Serial.println(F("@ERR,ENABLE,FORMAT")); return; }
-  if (!configured) { Serial.println(F("@ERR,STATE,NOT_CONFIGURED")); return; }
+  if (count != 3) { out.println(F("@ERR,ENABLE,FORMAT")); return; }
+  if (!configured) { out.println(F("@ERR,STATE,NOT_CONFIGURED")); return; }
   byte flag;
-  if (!parseByteValue(tokens[2], flag) || flag > 1) { Serial.println(F("@ERR,ENABLE,FORMAT")); return; }
+  if (!parseByteValue(tokens[2], flag) || flag > 1) { out.println(F("@ERR,ENABLE,FORMAT")); return; }
   SensorConfig candidate = config;
   if (strcmp(tokens[1], "HC") == 0) candidate.hcEnabled = flag;
   else if (strcmp(tokens[1], "PIR") == 0) candidate.pirEnabled = flag;
   else if (strcmp(tokens[1], "RADAR") == 0) candidate.radarEnabled = flag;
   else if (strcmp(tokens[1], "LUX") == 0) candidate.luxEnabled = flag;
   else if (strcmp(tokens[1], "SOUND") == 0) candidate.soundEnabled = flag;
-  else { Serial.println(F("@ERR,ENABLE,SENSOR")); return; }
-  if (!validConfig(candidate)) { Serial.println(F("@ERR,CONFIG,PINS_OR_ROLE")); return; }
+  else { out.println(F("@ERR,ENABLE,SENSOR")); return; }
+  if (!validConfig(candidate)) { out.println(F("@ERR,CONFIG,PINS_OR_ROLE")); return; }
   if (candidate.luxEnabled) {
     Wire.begin();
     if (!lightMeter.begin(BH1750::CONTINUOUS_HIGH_RES_MODE)) {
-      Serial.println(F("@ERR,CONFIG,BH1750_NOT_FOUND")); return;
+      out.println(F("@ERR,CONFIG,BH1750_NOT_FOUND")); return;
     }
   }
   releasePins();
   config = candidate;
   configurePins();
-  Serial.print(F("@OK,ENABLE,")); Serial.print(tokens[1]); Serial.print(','); Serial.println(flag);
+  out.print(F("@OK,ENABLE,")); out.print(tokens[1]); out.print(','); out.println(flag);
 }
 
 void handleCommand(char *line) {
@@ -131,38 +132,25 @@ void handleCommand(char *line) {
   // Conserva los campos vacios para rechazarlos; no utiliza strtok().
   for (char *cursor = line; *cursor; ++cursor) {
     if (*cursor == ',') {
-      if (count >= 12) { Serial.println(F("@ERR,COMMAND,FORMAT")); return; }
+      if (count >= 12) { out.println(F("@ERR,COMMAND,FORMAT")); return; }
       *cursor = '\0'; tokens[count++] = cursor + 1;
     }
   }
   if (strcmp(tokens[0], "INFO") == 0 && count == 1) {
-    Serial.print(F("@OK,INFO,2,")); Serial.println(ORIGIN);
+    out.print(F("@OK,INFO,2,")); out.println(ORIGIN);
   } else if (strcmp(tokens[0], "CONFIG") == 0) handleConfig(tokens, count);
   else if (strcmp(tokens[0], "ENABLE") == 0) handleEnable(tokens, count);
   else if (strcmp(tokens[0], "STOP") == 0 && count == 1) {
-    capturing = false; Serial.println(F("@OK,STOP"));
+    capturing = false; out.println(F("@OK,STOP"));
   } else if (strcmp(tokens[0], "START") == 0 && count == 1) {
-    if (!configured) { Serial.println(F("@ERR,STATE,NOT_CONFIGURED")); return; }
-    if (capturing) { Serial.println(F("@ERR,STATE,CAPTURE_ACTIVE")); return; }
+    if (!configured) { out.println(F("@ERR,STATE,NOT_CONFIGURED")); return; }
+    if (capturing) { out.println(F("@ERR,STATE,CAPTURE_ACTIVE")); return; }
     sequence = 0; captureStartedMs = lastSampleMs = millis(); capturing = true;
-    Serial.println(F("@OK,START"));
-  } else Serial.println(F("@ERR,COMMAND,UNKNOWN"));
+    out.println(F("@OK,START"));
+  } else out.println(F("@ERR,COMMAND,UNKNOWN"));
 }
 
-void readCommands() {
-  while (Serial.available() > 0) {
-    const char incoming = Serial.read();
-    if (incoming == '\r') continue;
-    if (incoming == '\n') {
-      if (inputOverflow) Serial.println(F("@ERR,COMMAND,TOO_LONG"));
-      else if (inputLength) { inputBuffer[inputLength] = '\0'; handleCommand(inputBuffer); }
-      inputLength = 0; inputOverflow = false;
-    } else if (!inputOverflow) {
-      if (inputLength < sizeof(inputBuffer) - 1) inputBuffer[inputLength++] = incoming;
-      else inputOverflow = true;
-    }
-  }
-}
+void readCommands() { readMasterCommands(); }
 
 void emitSample(unsigned long elapsedMs) {
   float distance = -1.0f, lux = -1.0f;
@@ -173,33 +161,35 @@ void emitSample(unsigned long elapsedMs) {
     const unsigned long echo = pulseIn(config.echoPin, HIGH, 24000UL);
     if (echo) distance = echo * 0.0343f / 2.0f;
     if (!echo || distance < 2.0f || distance > 400.0f) {
-      distance = -1.0f; Serial.println(F("@ERR,READ,HC_SR04_NO_VALID_ECHO"));
+      distance = -1.0f; out.println(F("@ERR,READ,HC_SR04_NO_VALID_ECHO"));
     }
   }
   if (config.luxEnabled) {
     lux = lightMeter.readLightLevel();
-    if (!isfinite(lux) || lux < 0) { lux = -1.0f; Serial.println(F("@ERR,READ,BH1750")); }
+    if (!isfinite(lux) || lux < 0) { lux = -1.0f; out.println(F("@ERR,READ,BH1750")); }
   }
-  Serial.print(ORIGIN); Serial.print(','); Serial.print(++sequence); Serial.print(',');
-  Serial.print(elapsedMs); Serial.print(',');
-  if (config.hcEnabled && distance >= 0) Serial.print(distance, 2); else Serial.print(F("NA"));
-  Serial.print(F(",NA,NA,"));
-  if (config.luxEnabled && lux >= 0) Serial.print(lux, 2); else Serial.print(F("NA"));
-  Serial.print(',');
+  out.print(ORIGIN); out.print(','); out.print(++sequence); out.print(',');
+  out.print(elapsedMs); out.print(',');
+  if (config.hcEnabled && distance >= 0) out.print(distance, 2); else out.print(F("NA"));
+  out.print(F(",NA,NA,"));
+  if (config.luxEnabled && lux >= 0) out.print(lux, 2); else out.print(F("NA"));
+  out.print(',');
   // Nivel electrico DO instantaneo. Verificar polaridad; no son dB ni conteos.
-  if (config.soundEnabled) Serial.println(digitalRead(config.soundPin)); else Serial.println(F("NA"));
+  if (config.soundEnabled) out.println(digitalRead(config.soundPin)); else out.println(F("NA"));
 }
 
 void setup() {
   Serial.begin(115200);
+  nanoBus.begin(9600);
   // No configura sensores hasta recibir CONFIG; revisar el cableado primero.
-  Serial.print(F("@READY,2,")); Serial.println(ORIGIN);
+  out.print(F("@READY,2,")); out.println(ORIGIN);
 }
 
 void loop() {
+  readNano();
   readCommands();
   const unsigned long now = millis();
-  if (capturing && now - lastSampleMs >= SAMPLE_INTERVAL_MS) {
+  if (!nanoPending && capturing && now - lastSampleMs >= SAMPLE_INTERVAL_MS) {
     lastSampleMs = now; // No genera rafagas de filas para compensar tiempo perdido.
     emitSample(now - captureStartedMs);
   }
